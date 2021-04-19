@@ -1,5 +1,54 @@
 //! Element IDs defines by the EBML and Matroska specifications.
 
+// TODO Refactor the constants into enums.
+
+use crate::ebml::{ElementData, ElementType};
+
+// TODO we can use the enum value as "enum as u8"
+/// The supported Element ID.
+pub(crate) enum ElementId {
+    Ebml = 0x1A45DFA3,
+    EbmlVersion = 0x4286,
+    EbmlReadVersion = 0x42F7,
+    EbmlMaxIdLength = 0x42F2,
+    EbmlMaxSizeLength = 0x42F3,
+    DocType = 0x4282,
+    DocTypeVersion = 0x4287,
+    DocTypeReadVersion = 0x4285,
+}
+
+impl ElementId {
+    pub(crate) fn element_type(&self) -> ElementType {
+        match self {
+            ElementId::Ebml => ElementType::Master,
+            ElementId::EbmlVersion => ElementType::UnsignedInteger,
+            ElementId::EbmlReadVersion => ElementType::UnsignedInteger,
+            ElementId::EbmlMaxIdLength => ElementType::UnsignedInteger,
+            ElementId::EbmlMaxSizeLength => ElementType::UnsignedInteger,
+            ElementId::DocType => ElementType::String,
+            ElementId::DocTypeVersion => ElementType::UnsignedInteger,
+            ElementId::DocTypeReadVersion => ElementType::UnsignedInteger,
+        }
+    }
+
+    pub(crate) fn is_expected_data(&self, data: &ElementData) -> bool {
+        match self {
+            ElementId::Ebml => matches!(data, ElementData::Location { .. }),
+            ElementId::EbmlVersion => matches!(data, ElementData::UnsignedInteger { .. }),
+            ElementId::EbmlReadVersion => matches!(data, ElementData::UnsignedInteger { .. }),
+            ElementId::EbmlMaxIdLength => matches!(data, ElementData::UnsignedInteger { .. }),
+            ElementId::EbmlMaxSizeLength => {
+                matches!(data, ElementData::UnsignedInteger { .. })
+            }
+            ElementId::DocType => matches!(data, ElementData::String { .. }),
+            ElementId::DocTypeVersion => matches!(data, ElementData::UnsignedInteger { .. }),
+            ElementId::DocTypeReadVersion => {
+                matches!(data, ElementData::UnsignedInteger { .. })
+            }
+        }
+    }
+}
+
 // EBML Basics
 
 pub(crate) const EBML: u32 = 0x1A45DFA3;

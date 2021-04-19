@@ -13,14 +13,29 @@ const DEMUXER_DOC_TYPE_VERSION: u64 = 4;
 
 static ID_TO_TYPE: Lazy<HashMap<u32, ElementType>> = Lazy::new(|| {
     let mut m = HashMap::new();
-    m.insert(EBML, ElementType::Master);
-    m.insert(EBML_VERSION, ElementType::UnsignedInteger);
-    m.insert(EBML_READ_VERSION, ElementType::UnsignedInteger);
-    m.insert(EBML_MAX_ID_LENGTH, ElementType::UnsignedInteger);
-    m.insert(EBML_MAX_SIZE_LENGTH, ElementType::UnsignedInteger);
-    m.insert(DOC_TYPE, ElementType::String);
-    m.insert(DOC_TYPE_VERSION, ElementType::UnsignedInteger);
-    m.insert(DOC_TYPE_READ_VERSION, ElementType::UnsignedInteger);
+    m.insert(ElementId::Ebml as u32, ElementType::Master);
+    m.insert(ElementId::EbmlVersion as u32, ElementType::UnsignedInteger);
+    m.insert(
+        ElementId::EbmlReadVersion as u32,
+        ElementType::UnsignedInteger,
+    );
+    m.insert(
+        ElementId::EbmlMaxIdLength as u32,
+        ElementType::UnsignedInteger,
+    );
+    m.insert(
+        ElementId::EbmlMaxSizeLength as u32,
+        ElementType::UnsignedInteger,
+    );
+    m.insert(ElementId::DocType as u32, ElementType::String);
+    m.insert(
+        ElementId::DocTypeVersion as u32,
+        ElementType::UnsignedInteger,
+    );
+    m.insert(
+        ElementId::DocTypeReadVersion as u32,
+        ElementType::UnsignedInteger,
+    );
     m.insert(VOID, ElementType::Binary);
     m.insert(SEGMENT, ElementType::Master);
     m.insert(SEEK_HEAD, ElementType::Master);
@@ -95,13 +110,13 @@ pub(crate) enum ElementType {
     Binary,
 }
 
-/// An EBML element.
+/// The data an element can contain.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Element {
+pub enum ElementData {
     /// Unknown element. Returns the Element ID.
     Unknown(u32),
-    /// An element that contains other elements als children. Returns the offset and size of the first child element.
-    Master { offset: u64, size: u64 },
+    /// Returns the offset and size of the data.
+    Location { offset: u64, size: u64 },
     /// Unsigned integer.
     UnsignedInteger(u64),
     /// Signed integer.
@@ -112,75 +127,18 @@ pub(crate) enum Element {
     Date(i64),
     /// String.
     String(String),
-    /// Binary. Returns the offset and size of the data.
-    Binary { offset: u64, size: u64 },
 }
 
 /// Parses and verifies the EBML header.
 pub(crate) fn parse_ebml_header<R: Read + Seek>(r: &mut R) -> Result<EBMLHeader> {
-    let master_element = parse_element(r)?;
-    if !matches!(master_element, Element::Master { .. }) {
-        return Err(DemuxError::InvalidEbmlHeader(
-            "EBML root not found".to_owned(),
-        ));
-    }
-
-    let version = if let Element::UnsignedInteger(version) = parse_element(r)? {
-        version
-    } else {
-        return Err(DemuxError::InvalidEbmlHeader(
-            "EBMLVersion element not found".to_owned(),
-        ));
-    };
-
-    let read_version = if let Element::UnsignedInteger(read_version) = parse_element(r)? {
-        read_version
-    } else {
-        return Err(DemuxError::InvalidEbmlHeader(
-            "EBMLReadVersion element not found".to_owned(),
-        ));
-    };
-
-    let max_id_length = if let Element::UnsignedInteger(max_id_length) = parse_element(r)? {
-        max_id_length
-    } else {
-        return Err(DemuxError::InvalidEbmlHeader(
-            "EBMLMaxIDLength element not found".to_owned(),
-        ));
-    };
-
-    let max_size_length = if let Element::UnsignedInteger(max_size_length) = parse_element(r)? {
-        max_size_length
-    } else {
-        return Err(DemuxError::InvalidEbmlHeader(
-            "EBMLMaxSizeLength element not found".to_owned(),
-        ));
-    };
-
-    let doc_type = if let Element::String(doc_type) = parse_element(r)? {
-        doc_type
-    } else {
-        return Err(DemuxError::InvalidEbmlHeader(
-            "DocType element not found".to_owned(),
-        ));
-    };
-
-    let doc_type_version = if let Element::UnsignedInteger(doc_type_version) = parse_element(r)? {
-        doc_type_version
-    } else {
-        return Err(DemuxError::InvalidEbmlHeader(
-            "DocTypeVersion element not found".to_owned(),
-        ));
-    };
-
-    let doc_type_read_version =
-        if let Element::UnsignedInteger(doc_type_read_version) = parse_element(r)? {
-            doc_type_read_version
-        } else {
-            return Err(DemuxError::InvalidEbmlHeader(
-                "DocTypeReadVersion element not found".to_owned(),
-            ));
-        };
+    parse_expected_master(r, EBML)?;
+    let version = parse_expected_unsigned_integer(r, EBML_VERSION)?;
+    let read_version = parse_expected_unsigned_integer(r, EBML_READ_VERSION)?;
+    let max_id_length = parse_expected_unsigned_integer(r, EBML_MAX_ID_LENGTH)?;
+    let max_size_length = parse_expected_unsigned_integer(r, EBML_MAX_SIZE_LENGTH)?;
+    let doc_type = parse_expected_string(r, DOC_TYPE)?;
+    let doc_type_version = parse_expected_unsigned_integer(r, DOC_TYPE_VERSION)?;
+    let doc_type_read_version = parse_expected_unsigned_integer(r, DOC_TYPE_READ_VERSION)?;
 
     if &doc_type != "matroska" && &doc_type != "webm" {
         return Err(DemuxError::UnsupportedDocType(doc_type));
@@ -203,33 +161,80 @@ pub(crate) fn parse_ebml_header<R: Read + Seek>(r: &mut R) -> Result<EBMLHeader>
     })
 }
 
+/// Tries to parse a given Element ID that returns a master element at the current location of the reader.
+pub(crate) fn parse_expected_master<R: Read + Seek>(
+    r: &mut R,
+    expected: u32,
+) -> Result<(u64, u64)> {
+    let element = parse_from(r, Some(expected), None)?;
+    if let ElementData::Location { offset, size } = element {
+        Ok((offset, size))
+    } else {
+        Err(DemuxError::UnexpectedDataType(element))
+    }
+}
+
+/// Tries to parse a given Element ID that returns a unsigned integer at the current location of the reader.
+pub(crate) fn parse_expected_unsigned_integer<R: Read + Seek>(
+    r: &mut R,
+    expected: u32,
+) -> Result<u64> {
+    let element = parse_from(r, Some(expected), None)?;
+    if let ElementData::UnsignedInteger(value) = element {
+        Ok(value)
+    } else {
+        Err(DemuxError::UnexpectedDataType(element))
+    }
+}
+
+/// Tries to parse a given Element ID that returns a string at the current location of the reader.
+pub(crate) fn parse_expected_string<R: Read + Seek>(r: &mut R, expected: u32) -> Result<String> {
+    let element = parse_from(r, Some(expected), None)?;
+    if let ElementData::String(value) = element {
+        Ok(value)
+    } else {
+        Err(DemuxError::UnexpectedDataType(element))
+    }
+}
+
 /// Parses the next element at the current location of the reader.
-pub(crate) fn parse_element<R: Read + Seek>(r: &mut R) -> Result<Element> {
-    parse_element_from(r, None)
+pub(crate) fn parse_next<R: Read + Seek>(r: &mut R) -> Result<ElementData> {
+    parse_from(r, None, None)
 }
 
 /// Parses the next element from the given location inside the reader.
-pub(crate) fn parse_element_from<R: Read + Seek>(r: &mut R, from: Option<u64>) -> Result<Element> {
+pub(crate) fn parse_from<R: Read + Seek>(
+    r: &mut R,
+    expected: Option<u32>,
+    from: Option<u64>,
+) -> Result<ElementData> {
     if let Some(from) = from {
         r.seek(SeekFrom::Start(from))?;
     }
 
     let element_id = parse_element_id(r)?;
     let size = parse_data_size(r)?;
+
+    if let Some(expected) = expected {
+        if element_id != expected {
+            return Err(DemuxError::UnexpectedElement((expected, element_id)));
+        }
+    }
+
     let element_type = *ID_TO_TYPE.get(&element_id).unwrap_or(&ElementType::Unknown);
 
     // TODO Default values are used if the size is "0".
     // https://tools.ietf.org/html/rfc8794
 
     let element = match element_type {
-        ElementType::Unknown => Element::Unknown(element_id),
-        ElementType::Master => parse_master(r, size)?,
+        ElementType::Unknown => ElementData::Unknown(element_id),
+        ElementType::Master => parse_location(r, size)?,
         ElementType::UnsignedInteger => parse_unsigned_integer(r, size)?,
         ElementType::SignedInteger => parse_signed_integer(r, size)?,
         ElementType::Float => parse_float(r, size)?,
         ElementType::Date => parse_date(r, size)?,
         ElementType::String => parse_string(r, size)?,
-        ElementType::Binary => parse_binary(r, size)?,
+        ElementType::Binary => parse_location(r, size)?,
     };
 
     // TODO Default — The default value of the element to use if the parent element is present but this element is not.
@@ -281,26 +286,26 @@ fn read_size_value<R: Read>(r: &mut R, byte: u8, left: usize) -> Result<u64> {
     Ok(u64::from_be_bytes(bytes) >> (8 * (7 - left as u32)))
 }
 
-fn parse_master<R: Read + Seek>(r: &mut R, size: u64) -> Result<Element> {
+fn parse_location<R: Read + Seek>(r: &mut R, size: u64) -> Result<ElementData> {
     let offset = r.stream_position()?;
-    Ok(Element::Master { offset, size })
+    Ok(ElementData::Location { offset, size })
 }
 
-fn parse_unsigned_integer<R: Read>(r: &mut R, size: u64) -> Result<Element> {
+fn parse_unsigned_integer<R: Read>(r: &mut R, size: u64) -> Result<ElementData> {
     let mut bytes = [0u8; 8];
     r.read_exact(&mut bytes[0..size as usize])?;
     let value = u64::from_be_bytes(bytes) >> (8 * (8 - size as u32));
-    Ok(Element::UnsignedInteger(value))
+    Ok(ElementData::UnsignedInteger(value))
 }
 
-fn parse_signed_integer<R: Read>(r: &mut R, size: u64) -> Result<Element> {
+fn parse_signed_integer<R: Read>(r: &mut R, size: u64) -> Result<ElementData> {
     let mut bytes = [0u8; 8];
     r.read_exact(&mut bytes[0..size as usize])?;
     let value = i64::from_be_bytes(bytes) >> (8 * (8 - size as u32));
-    Ok(Element::SignedInteger(value))
+    Ok(ElementData::SignedInteger(value))
 }
 
-fn parse_float<R: Read>(r: &mut R, size: u64) -> Result<Element> {
+fn parse_float<R: Read>(r: &mut R, size: u64) -> Result<ElementData> {
     let value = match size {
         4 => {
             let mut bytes = [0u8; 4];
@@ -314,26 +319,21 @@ fn parse_float<R: Read>(r: &mut R, size: u64) -> Result<Element> {
         }
         _ => return Err(DemuxError::WrongFloatSize(size)),
     };
-    Ok(Element::Float(value))
+    Ok(ElementData::Float(value))
 }
 
-fn parse_date<R: Read>(r: &mut R, size: u64) -> Result<Element> {
+fn parse_date<R: Read>(r: &mut R, size: u64) -> Result<ElementData> {
     let mut bytes = [0u8; 8];
     r.read_exact(&mut bytes[0..size as usize])?;
     let value = i64::from_be_bytes(bytes) >> (8 * (8 - size as u32));
-    Ok(Element::Date(value))
+    Ok(ElementData::Date(value))
 }
 
-fn parse_string<R: Read>(r: &mut R, size: u64) -> Result<Element> {
+fn parse_string<R: Read>(r: &mut R, size: u64) -> Result<ElementData> {
     let mut bytes = vec![0u8; size as usize];
     r.read_exact(&mut bytes[0..size as usize])?;
     let value = String::from_utf8(bytes)?;
-    Ok(Element::String(value))
-}
-
-fn parse_binary<R: Read + Seek>(r: &mut R, size: u64) -> Result<Element> {
-    let offset = r.stream_position()?;
-    Ok(Element::Binary { offset, size })
+    Ok(ElementData::String(value))
 }
 
 #[cfg(test)]
@@ -346,10 +346,10 @@ mod tests {
     fn test_parse_master_element() {
         let data: Vec<u8> = vec![0x1A, 0x45, 0xDF, 0xA3, 0xA2];
         let mut cursor = Cursor::new(data);
-        let data = parse_element(&mut cursor).unwrap();
+        let data = parse_next(&mut cursor).unwrap();
         assert_eq!(
             data,
-            Element::Master {
+            ElementData::Location {
                 offset: 5,
                 size: 34,
             }
@@ -360,32 +360,32 @@ mod tests {
     fn test_parse_unsigned_integer() {
         let data: Vec<u8> = vec![0x42, 0x86, 0x81, 0x01];
         let mut cursor = Cursor::new(data);
-        let data = parse_element(&mut cursor).unwrap();
-        assert_eq!(data, Element::UnsignedInteger(1));
+        let data = parse_next(&mut cursor).unwrap();
+        assert_eq!(data, ElementData::UnsignedInteger(1));
     }
 
     #[test]
     fn test_parse_signed_integer() {
         let data: Vec<u8> = vec![0xFB, 0x82, 0xFF, 0xFB];
         let mut cursor = Cursor::new(data);
-        let data = parse_element(&mut cursor).unwrap();
-        assert_eq!(data, Element::SignedInteger(-5));
+        let data = parse_next(&mut cursor).unwrap();
+        assert_eq!(data, ElementData::SignedInteger(-5));
     }
 
     #[test]
     fn test_parse_date() {
         let data: Vec<u8> = vec![0x44, 0x61, 0x84, 0xFF, 0xB3, 0xB4, 0xC0];
         let mut cursor = Cursor::new(data);
-        let data = parse_element(&mut cursor).unwrap();
-        assert_eq!(data, Element::Date(-5_000_000));
+        let data = parse_next(&mut cursor).unwrap();
+        assert_eq!(data, ElementData::Date(-5_000_000));
     }
 
     #[test]
     fn test_parse_float_32() {
         let data: Vec<u8> = vec![0x44, 0x89, 0x84, 0x43, 0x1C, 0x20, 0x07];
         let mut cursor = Cursor::new(data);
-        let data = parse_element(&mut cursor).unwrap();
-        if let Element::Float(x) = data {
+        let data = parse_next(&mut cursor).unwrap();
+        if let ElementData::Float(x) = data {
             assert!((x - 156.1251).abs() < 0.00001)
         } else {
             panic!("parse_element returned the wrong element type");
@@ -398,20 +398,12 @@ mod tests {
             0x44, 0x89, 0x88, 0x40, 0xA9, 0xE0, 0x43, 0x30, 0xBC, 0x60, 0x6E,
         ];
         let mut cursor = Cursor::new(data);
-        let data = parse_element(&mut cursor).unwrap();
-        if let Element::Float(x) = data {
+        let data = parse_next(&mut cursor).unwrap();
+        if let ElementData::Float(x) = data {
             assert!((x - 3312.1312312).abs() < 0.00001)
         } else {
             panic!("parse_element returned the wrong element type");
         }
-    }
-
-    #[test]
-    fn test_parse_unknown() {
-        let data: Vec<u8> = vec![0xF1, 0x80];
-        let mut cursor = Cursor::new(data);
-        let data = parse_element(&mut cursor).unwrap();
-        assert_eq!(data, Element::Unknown(0xF1));
     }
 
     #[test]
@@ -420,8 +412,8 @@ mod tests {
             0x42, 0x82, 0x88, 0x6D, 0x61, 0x74, 0x72, 0x6F, 0x73, 0x6B, 0x61,
         ];
         let mut cursor = Cursor::new(data);
-        let data = parse_element(&mut cursor).unwrap();
-        assert_eq!(data, Element::String("matroska".to_owned()));
+        let data = parse_next(&mut cursor).unwrap();
+        assert_eq!(data, ElementData::String("matroska".to_owned()));
     }
 
     #[test]
@@ -431,8 +423,8 @@ mod tests {
             0x90, 0xE3, 0x81, 0x8A, 0xE3, 0x81, 0x8B, 0xE3, 0x82, 0x86,
         ];
         let mut cursor = Cursor::new(data);
-        let data = parse_element(&mut cursor).unwrap();
-        assert_eq!(data, Element::String("もぐもぐおかゆ".to_owned()));
+        let data = parse_next(&mut cursor).unwrap();
+        assert_eq!(data, ElementData::String("もぐもぐおかゆ".to_owned()));
     }
 
     #[test]
@@ -442,10 +434,10 @@ mod tests {
             0x90, 0xE3, 0x81, 0x8A, 0xE3, 0x81, 0x8B, 0xE3, 0x82, 0x86,
         ];
         let mut cursor = Cursor::new(data);
-        let data = parse_element(&mut cursor).unwrap();
+        let data = parse_next(&mut cursor).unwrap();
         assert_eq!(
             data,
-            Element::Binary {
+            ElementData::Location {
                 offset: 3,
                 size: 21,
             }

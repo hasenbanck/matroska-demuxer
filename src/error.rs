@@ -2,6 +2,8 @@
 
 use std::error::Error;
 
+use crate::ebml::ElementData;
+
 /// Errors that can occur when demuxing Matroska files.
 #[derive(Debug)]
 pub enum DemuxError {
@@ -21,6 +23,10 @@ pub enum DemuxError {
     UnsupportedDocType(String),
     /// Unsupported DocTypeReadVersion.
     UnsupportedDocTypeReadVersion(u64),
+    /// Unexpected Element found.
+    UnexpectedElement((u32, u32)),
+    /// Unexpected data type found.
+    UnexpectedDataType(ElementData),
 }
 
 impl std::fmt::Display for DemuxError {
@@ -57,6 +63,16 @@ impl std::fmt::Display for DemuxError {
             }
             DemuxError::UnsupportedDocTypeReadVersion(version) => {
                 write!(f, "unsupported DocTypeReadVersion: {}", version)
+            }
+            DemuxError::UnexpectedElement((expected, found)) => {
+                write!(
+                    f,
+                    "unexpected element found. Expected: {} Found: {}",
+                    expected, found
+                )
+            }
+            DemuxError::UnexpectedDataType(element) => {
+                write!(f, "unexpected data type found: {:?}", element)
             }
         }
     }
