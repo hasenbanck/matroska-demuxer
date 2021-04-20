@@ -17,6 +17,7 @@ pub enum ElementId {
     DocType,
     DocTypeVersion,
     DocTypeReadVersion,
+    Crc32,
     Void,
     Segment,
     SeekHead,
@@ -164,6 +165,7 @@ pub(crate) static ELEMENT_ID_TO_TYPE: Lazy<HashMap<ElementId, ElementType>> = La
     m.insert(ElementId::DocType, ElementType::String);
     m.insert(ElementId::DocTypeVersion, ElementType::Unsigned);
     m.insert(ElementId::DocTypeReadVersion, ElementType::Unsigned);
+    m.insert(ElementId::Crc32, ElementType::Binary);
     m.insert(ElementId::Void, ElementType::Binary);
     m.insert(ElementId::Segment, ElementType::Master);
     m.insert(ElementId::SeekHead, ElementType::Master);
@@ -313,6 +315,7 @@ pub(crate) static ID_TO_ELEMENT_ID: Lazy<HashMap<u32, ElementId>> = Lazy::new(||
     m.insert(0x4282, ElementId::DocType);
     m.insert(0x4287, ElementId::DocTypeVersion);
     m.insert(0x4285, ElementId::DocTypeReadVersion);
+    m.insert(0xBF, ElementId::Crc32);
     m.insert(0xEC, ElementId::Void);
     m.insert(0x18538067, ElementId::Segment);
     m.insert(0x114D9B74, ElementId::SeekHead);

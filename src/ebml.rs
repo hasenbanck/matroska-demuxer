@@ -29,14 +29,15 @@ pub enum ElementData {
 
 /// Parses and verifies the EBML header.
 pub(crate) fn parse_ebml_header<R: Read + Seek>(r: &mut R) -> Result<EbmlHeader> {
-    expect_master(r, ElementId::Ebml)?;
-    let version = expect_unsigned(r, ElementId::EbmlVersion)?;
-    let read_version = expect_unsigned(r, ElementId::EbmlReadVersion)?;
-    let max_id_length = expect_unsigned(r, ElementId::EbmlMaxIdLength)?;
-    let max_size_length = expect_unsigned(r, ElementId::EbmlMaxSizeLength)?;
-    let doc_type = expect_string(r, ElementId::DocType)?;
-    let doc_type_version = expect_unsigned(r, ElementId::DocTypeVersion)?;
-    let doc_type_read_version = expect_unsigned(r, ElementId::DocTypeReadVersion)?;
+    let (offset, _) = expect_master(r, ElementId::Ebml, None)?;
+
+    let version = expect_unsigned(r, ElementId::EbmlVersion, Some(offset))?;
+    let read_version = expect_unsigned(r, ElementId::EbmlReadVersion, None)?;
+    let max_id_length = expect_unsigned(r, ElementId::EbmlMaxIdLength, None)?;
+    let max_size_length = expect_unsigned(r, ElementId::EbmlMaxSizeLength, None)?;
+    let doc_type = expect_string(r, ElementId::DocType, None)?;
+    let doc_type_version = expect_unsigned(r, ElementId::DocTypeVersion, None)?;
+    let doc_type_read_version = expect_unsigned(r, ElementId::DocTypeReadVersion, None)?;
 
     if &doc_type != "matroska" && &doc_type != "webm" {
         return Err(DemuxError::UnsupportedDocType(doc_type));
@@ -63,8 +64,9 @@ pub(crate) fn parse_ebml_header<R: Read + Seek>(r: &mut R) -> Result<EbmlHeader>
 pub(crate) fn expect_master<R: Read + Seek>(
     r: &mut R,
     expected_id: ElementId,
+    from: Option<u64>,
 ) -> Result<(u64, u64)> {
-    let (element_id, size) = parse_element(r, None)?;
+    let (element_id, size) = parse_element(r, from)?;
 
     if element_id != expected_id {
         return Err(DemuxError::UnexpectedElement((expected_id, element_id)));
@@ -73,9 +75,13 @@ pub(crate) fn expect_master<R: Read + Seek>(
     parse_location(r, size)
 }
 
-/// Tries to parse a given Element ID that returns a unsigned integer at the current location of the reader.
-pub(crate) fn expect_unsigned<R: Read + Seek>(r: &mut R, expected_id: ElementId) -> Result<u64> {
-    let (element_id, size) = parse_element(r, None)?;
+/// Tries to parse a given Element ID that returns a unsigned integer at the given location of the reader.
+pub(crate) fn expect_unsigned<R: Read + Seek>(
+    r: &mut R,
+    expected_id: ElementId,
+    from: Option<u64>,
+) -> Result<u64> {
+    let (element_id, size) = parse_element(r, from)?;
 
     if element_id != expected_id {
         return Err(DemuxError::UnexpectedElement((expected_id, element_id)));
@@ -84,9 +90,13 @@ pub(crate) fn expect_unsigned<R: Read + Seek>(r: &mut R, expected_id: ElementId)
     parse_unsigned(r, size)
 }
 
-/// Tries to parse a given Element ID that returns a string at the current location of the reader.
-pub(crate) fn expect_string<R: Read + Seek>(r: &mut R, expected_id: ElementId) -> Result<String> {
-    let (element_id, size) = parse_element(r, None)?;
+/// Tries to parse a given Element ID that returns a string at the given location of the reader.
+pub(crate) fn expect_string<R: Read + Seek>(
+    r: &mut R,
+    expected_id: ElementId,
+    from: Option<u64>,
+) -> Result<String> {
+    let (element_id, size) = parse_element(r, from)?;
 
     if element_id != expected_id {
         return Err(DemuxError::UnexpectedElement((expected_id, element_id)));
@@ -203,6 +213,8 @@ fn parse_size_value<R: Read>(r: &mut R, byte: u8, left: usize) -> Result<u64> {
 
 fn parse_location<R: Read + Seek>(r: &mut R, size: u64) -> Result<(u64, u64)> {
     let offset = r.stream_position()?;
+    // We skip the data and set the reader to the next element.
+    r.seek(SeekFrom::Current(offset as i64))?;
     Ok((offset, size))
 }
 
