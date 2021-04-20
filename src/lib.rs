@@ -173,9 +173,17 @@ impl From<u64> for TrackType {
 // TODO enum ContentEncAlgo
 // TODO enum AESSettingsCipherMode
 
+/// The value of a simple tag.
+pub enum SimpleTagValue {
+    /// Unicode string.
+    String(String),
+    /// Binary data.
+    Binary(Vec<u8>),
+}
+
 /// The EBML header of the file.
 #[derive(Clone, Debug)]
-pub struct EBMLHeader {
+pub struct EbmlHeader {
     version: u64,
     read_version: u64,
     max_id_length: u64,
@@ -185,7 +193,7 @@ pub struct EBMLHeader {
     doc_type_read_version: u64,
 }
 
-impl EBMLHeader {
+impl EbmlHeader {
     /// The EBML version used to create the file.
     pub fn version(&self) -> u64 {
         self.version
@@ -226,7 +234,7 @@ impl EBMLHeader {
 #[derive(Clone, Debug)]
 pub struct MatroskaFile<R> {
     file: R,
-    ebml_header: EBMLHeader,
+    ebml_header: EbmlHeader,
 }
 
 impl<R: Read + Seek> MatroskaFile<R> {
@@ -237,7 +245,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
     }
 
     /// Returns the EBML header.
-    pub fn ebml_header(&self) -> &EBMLHeader {
+    pub fn ebml_header(&self) -> &EbmlHeader {
         &self.ebml_header
     }
 }
