@@ -2,7 +2,7 @@
 
 /// The Matrix Coefficients of the video used to derive luma and chroma values
 /// from red, green, and blue color primaries. For clarity, the value and meanings
-/// for MatrixCoefficients are adopted from Table 4 of ISO/IEC 23001-8:2016 or ITU-T H.273.
+/// for `MatrixCoefficients` are adopted from Table 4 of ISO/IEC 23001-8:2016 or ITU-T H.273.
 pub enum MatrixCoefficients {
     /// Unknown,
     Unknown,
@@ -55,7 +55,7 @@ impl From<u64> for MatrixCoefficients {
     }
 }
 
-/// How DisplayWidth & DisplayHeight are interpreted.
+/// How `DisplayWidth` & `DisplayHeight` are interpreted.
 pub enum DisplayUnit {
     /// In pixels.
     Pixels,
@@ -295,7 +295,7 @@ pub enum Range {
     /// Unknown.
     Unknown,
     /// Broadcast range.
-    BroadcastRange,
+    Broadcast,
     /// Full range (no clipping).
     Full,
     /// Defined by MatrixCoefficients / TransferCharacteristics.
@@ -305,7 +305,7 @@ pub enum Range {
 impl From<u64> for Range {
     fn from(d: u64) -> Self {
         match d {
-            1 => Range::BroadcastRange,
+            1 => Range::Broadcast,
             2 => Range::Full,
             3 => Range::Defined,
             _ => Range::Unknown,
@@ -314,7 +314,7 @@ impl From<u64> for Range {
 }
 
 /// The transfer characteristics of the video. For clarity, the value and meanings
-/// for TransferCharacteristics are adopted from Table 3 of ISO/IEC 23091-4 or ITU-T H.273.
+/// for `TransferCharacteristics` are adopted from Table 3 of ISO/IEC 23091-4 or ITU-T H.273.
 pub enum TransferCharacteristics {
     /// Unknown.
     Unknown,

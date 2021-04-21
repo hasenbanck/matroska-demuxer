@@ -154,7 +154,7 @@ pub enum ElementId {
     TagBinary,
 }
 
-#[allow(unused)]
+#[allow(unused_results)]
 pub(crate) static ELEMENT_ID_TO_TYPE: Lazy<HashMap<ElementId, ElementType>> = Lazy::new(|| {
     let mut m = HashMap::new();
     m.insert(ElementId::Ebml, ElementType::Master);
@@ -299,12 +299,12 @@ pub(crate) static ELEMENT_ID_TO_TYPE: Lazy<HashMap<ElementId, ElementType>> = La
     m.insert(ElementId::TagName, ElementType::String);
     m.insert(ElementId::TagLanguage, ElementType::String);
     m.insert(ElementId::TagDefault, ElementType::Unsigned);
-    // Only one of both can be used! -> Enum!
     m.insert(ElementId::TagString, ElementType::String);
     m.insert(ElementId::TagBinary, ElementType::Binary);
     m
 });
 
+#[allow(unused_results)]
 pub(crate) static ID_TO_ELEMENT_ID: Lazy<HashMap<u32, ElementId>> = Lazy::new(|| {
     let mut m = HashMap::new();
     m.insert(0x1A45DFA3, ElementId::Ebml);
@@ -320,7 +320,6 @@ pub(crate) static ID_TO_ELEMENT_ID: Lazy<HashMap<u32, ElementId>> = Lazy::new(||
     m.insert(0x18538067, ElementId::Segment);
     m.insert(0x114D9B74, ElementId::SeekHead);
     m.insert(0x4DBB, ElementId::Seek);
-    // This is a binary in the spec, but we convert the IDs to u32.
     m.insert(0x53AB, ElementId::SeekId);
     m.insert(0x53AC, ElementId::SeekPosition);
     m.insert(0x1549A966, ElementId::Info);

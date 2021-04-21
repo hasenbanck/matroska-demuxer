@@ -1,8 +1,9 @@
 //! Implement the parsing of EBML coded files.
 
+use std::convert::TryInto;
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::element_id::*;
+use crate::element_id::{ElementId, ElementType, ELEMENT_ID_TO_TYPE, ID_TO_ELEMENT_ID};
 use crate::{DemuxError, EbmlHeader, Result};
 
 /// The doc type version this demuxer supports.
@@ -117,7 +118,7 @@ pub(crate) fn next_element<R: Read + Seek>(r: &mut R) -> Result<(ElementId, Elem
 
     let element_data = match element_type {
         ElementType::Unknown => ElementData::Unknown,
-        ElementType::Master => {
+        ElementType::Master | ElementType::Binary => {
             let (offset, size) = parse_location(r, size)?;
             ElementData::Location { offset, size }
         }
@@ -141,10 +142,6 @@ pub(crate) fn next_element<R: Read + Seek>(r: &mut R) -> Result<(ElementId, Elem
             let value = parse_string(r, size)?;
             ElementData::String(value)
         }
-        ElementType::Binary => {
-            let (offset, size) = parse_location(r, size)?;
-            ElementData::Location { offset, size }
-        }
     };
 
     Ok((element_id, element_data))
@@ -156,7 +153,7 @@ pub(crate) fn parse_element<R: Read + Seek>(
     from: Option<u64>,
 ) -> Result<(ElementId, u64)> {
     if let Some(from) = from {
-        r.seek(SeekFrom::Start(from))?;
+        let _ = r.seek(SeekFrom::Start(from))?;
     }
 
     let id = parse_element_id(r)?;
@@ -172,7 +169,7 @@ fn parse_element_id<R: Read>(r: &mut R) -> Result<u32> {
     let mut bytes = [0u8];
     r.read_exact(&mut bytes)?;
     let element_id = match bytes[0] {
-        byte if (byte & 0x80) == 0x80 => byte as u32,
+        byte if (byte & 0x80) == 0x80 => byte.into(),
         byte if (byte & 0xC0) == 0x40 => parse_id_value(r, byte, 1)?,
         byte if (byte & 0xE0) == 0x20 => parse_id_value(r, byte, 2)?,
         byte if (byte & 0xF0) == 0x10 => parse_id_value(r, byte, 3)?,
@@ -186,7 +183,7 @@ fn parse_data_size<R: Read>(r: &mut R) -> Result<u64> {
     let mut bytes = [0u8];
     r.read_exact(&mut bytes)?;
     let size = match bytes[0] {
-        byte if (byte & 0x80) == 0x80 => (0x7F & byte as u64),
+        byte if (byte & 0x80) == 0x80 => (0x7F & byte).into(),
         byte if (byte & 0xC0) == 0x40 => parse_size_value(r, 0x3F & byte, 1)?,
         byte if (byte & 0xE0) == 0x20 => parse_size_value(r, 0x1F & byte, 2)?,
         byte if (byte & 0xF0) == 0x10 => parse_size_value(r, 0x0F & byte, 3)?,
@@ -199,43 +196,62 @@ fn parse_data_size<R: Read>(r: &mut R) -> Result<u64> {
     Ok(size)
 }
 
-fn parse_id_value<R: Read>(r: &mut R, byte: u8, left: usize) -> Result<u32> {
+fn parse_id_value<R: Read>(r: &mut R, byte: u8, left: u8) -> Result<u32> {
+    let shift: usize = (8 * (3 - left)).into();
+
     let mut bytes = [byte, 0, 0, 0];
-    r.read_exact(&mut bytes[1..1 + left])?;
-    Ok(u32::from_be_bytes(bytes) >> (8 * (3 - left as u32)))
+    r.read_exact(&mut bytes[1..=left.into()])?;
+
+    Ok(u32::from_be_bytes(bytes) >> shift)
 }
 
-fn parse_size_value<R: Read>(r: &mut R, byte: u8, left: usize) -> Result<u64> {
+fn parse_size_value<R: Read>(r: &mut R, byte: u8, left: u8) -> Result<u64> {
+    let shift: usize = (8 * (7 - left)).into();
+
     let mut bytes = [byte, 0, 0, 0, 0, 0, 0, 0];
-    r.read_exact(&mut bytes[1..1 + left])?;
-    Ok(u64::from_be_bytes(bytes) >> (8 * (7 - left as u32)))
+    r.read_exact(&mut bytes[1..=left.into()])?;
+
+    Ok(u64::from_be_bytes(bytes) >> shift)
 }
 
 fn parse_location<R: Read + Seek>(r: &mut R, size: u64) -> Result<(u64, u64)> {
     let offset = r.stream_position()?;
     // We skip the data and set the reader to the next element.
-    r.seek(SeekFrom::Current(offset as i64))?;
+    let _ = r.seek(SeekFrom::Start(offset + size))?;
+
     Ok((offset, size))
 }
 
+#[allow(clippy::as_conversions)]
 fn parse_unsigned<R: Read>(r: &mut R, size: u64) -> Result<u64> {
     if size == 0 {
         return Ok(0);
     }
+    if size > 8 {
+        return Err(DemuxError::WrongIntegerSize(size));
+    }
+    let shift = (8 * (8 - size)) as i64;
 
     let mut bytes = [0u8; 8];
     r.read_exact(&mut bytes[0..size as usize])?;
-    Ok(u64::from_be_bytes(bytes) >> (8 * (8 - size as u32)))
+
+    Ok(u64::from_be_bytes(bytes) >> shift)
 }
 
+#[allow(clippy::as_conversions)]
 fn parse_signed<R: Read>(r: &mut R, size: u64) -> Result<i64> {
     if size == 0 {
         return Ok(0);
     }
+    if size > 8 {
+        return Err(DemuxError::WrongIntegerSize(size));
+    }
+    let shift = (8 * (8 - size)) as i64;
 
     let mut bytes = [0u8; 8];
     r.read_exact(&mut bytes[0..size as usize])?;
-    Ok(i64::from_be_bytes(bytes) >> (8 * (8 - size as u32)))
+
+    Ok(i64::from_be_bytes(bytes) >> shift)
 }
 
 fn parse_float<R: Read>(r: &mut R, size: u64) -> Result<f64> {
@@ -244,7 +260,7 @@ fn parse_float<R: Read>(r: &mut R, size: u64) -> Result<f64> {
         4 => {
             let mut bytes = [0u8; 4];
             r.read_exact(&mut bytes)?;
-            Ok(f32::from_be_bytes(bytes) as f64)
+            Ok(f32::from_be_bytes(bytes).into())
         }
         8 => {
             let mut bytes = [0u8; 8];
@@ -255,14 +271,20 @@ fn parse_float<R: Read>(r: &mut R, size: u64) -> Result<f64> {
     }
 }
 
+#[allow(clippy::as_conversions)]
 fn parse_date<R: Read>(r: &mut R, size: u64) -> Result<i64> {
     if size == 0 {
         return Ok(0);
     }
+    if size > 8 {
+        return Err(DemuxError::WrongDateSize(size));
+    }
+    let shift = (8 * (8 - size)) as i64;
 
     let mut bytes = [0u8; 8];
     r.read_exact(&mut bytes[0..size as usize])?;
-    Ok(i64::from_be_bytes(bytes) >> (8 * (8 - size as u32)))
+
+    Ok(i64::from_be_bytes(bytes) >> shift)
 }
 
 fn parse_string<R: Read>(r: &mut R, size: u64) -> Result<String> {
@@ -270,22 +292,26 @@ fn parse_string<R: Read>(r: &mut R, size: u64) -> Result<String> {
         return Ok(String::from(""));
     }
 
-    let mut bytes = vec![0u8; size as usize];
-    r.read_exact(&mut bytes[0..size as usize])?;
+    let size: usize = size.try_into()?;
+    let mut bytes = vec![0u8; size];
+    r.read_exact(&mut bytes[0..size])?;
+
     Ok(String::from_utf8(bytes)?)
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::panic)]
+
     use std::io::Cursor;
 
     use super::*;
 
     #[test]
-    fn test_parse_master_element() {
+    fn test_parse_master_element() -> Result<()> {
         let data: Vec<u8> = vec![0x1A, 0x45, 0xDF, 0xA3, 0xA2];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::Ebml);
         assert_eq!(
             element_data,
@@ -294,97 +320,113 @@ mod tests {
                 size: 34,
             }
         );
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_unsigned() {
+    fn test_parse_unsigned() -> Result<()> {
         let data: Vec<u8> = vec![0x42, 0x86, 0x81, 0x01];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::EbmlVersion);
         assert_eq!(element_data, ElementData::Unsigned(1));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_signed() {
+    fn test_parse_signed() -> Result<()> {
         let data: Vec<u8> = vec![0xFB, 0x82, 0xFF, 0xFB];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::ReferenceBlock);
         assert_eq!(element_data, ElementData::Signed(-5));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_date() {
+    fn test_parse_date() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x61, 0x84, 0xFF, 0xB3, 0xB4, 0xC0];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::DateUtc);
         assert_eq!(element_data, ElementData::Date(-5_000_000));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_float_32() {
+    fn test_parse_float_32() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x89, 0x84, 0x43, 0x1C, 0x20, 0x07];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
             assert!((x - 156.1251).abs() < 0.00001)
         } else {
             panic!("parse_element returned the wrong element type");
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_float_64() {
+    fn test_parse_float_64() -> Result<()> {
         let data: Vec<u8> = vec![
             0x44, 0x89, 0x88, 0x40, 0xA9, 0xE0, 0x43, 0x30, 0xBC, 0x60, 0x6E,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
             assert!((x - 3312.1312312).abs() < 0.00001)
         } else {
             panic!("parse_element returned the wrong element type");
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_ascii_string() {
+    fn test_parse_ascii_string() -> Result<()> {
         let data: Vec<u8> = vec![
             0x42, 0x82, 0x88, 0x6D, 0x61, 0x74, 0x72, 0x6F, 0x73, 0x6B, 0x61,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::DocType);
         assert_eq!(element_data, ElementData::String("matroska".to_owned()));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_utf8_string() {
+    fn test_parse_utf8_string() -> Result<()> {
         let data: Vec<u8> = vec![
             0x4D, 0x80, 0x95, 0xE3, 0x82, 0x82, 0xE3, 0x81, 0x90, 0xE3, 0x82, 0x82, 0xE3, 0x81,
             0x90, 0xE3, 0x81, 0x8A, 0xE3, 0x81, 0x8B, 0xE3, 0x82, 0x86,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::MuxingApp);
         assert_eq!(
             element_data,
             ElementData::String("もぐもぐおかゆ".to_owned())
         );
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_binary() {
+    fn test_parse_binary() -> Result<()> {
         let data: Vec<u8> = vec![
             0x63, 0xA2, 0x95, 0xE3, 0x82, 0x82, 0xE3, 0x81, 0x90, 0xE3, 0x82, 0x82, 0xE3, 0x81,
             0x90, 0xE3, 0x81, 0x8A, 0xE3, 0x81, 0x8B, 0xE3, 0x82, 0x86,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::CodecPrivate);
         assert_eq!(
             element_data,
@@ -393,75 +435,89 @@ mod tests {
                 size: 21,
             }
         );
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_default_unsigned() {
+    fn test_parse_default_unsigned() -> Result<()> {
         let data: Vec<u8> = vec![0x42, 0x86, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::EbmlVersion);
         assert_eq!(element_data, ElementData::Unsigned(0));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_default_signed() {
+    fn test_parse_default_signed() -> Result<()> {
         let data: Vec<u8> = vec![0xFB, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::ReferenceBlock);
         assert_eq!(element_data, ElementData::Signed(0));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_default_date() {
+    fn test_parse_default_date() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x61, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::DateUtc);
         assert_eq!(element_data, ElementData::Date(0));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_default_float() {
+    fn test_parse_default_float() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x89, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
             assert!((x).abs() < 0.00001)
         } else {
             panic!("parse_element returned the wrong element type");
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_default_ascii_string() {
+    fn test_parse_default_ascii_string() -> Result<()> {
         let data: Vec<u8> = vec![0x42, 0x82, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::DocType);
         assert_eq!(element_data, ElementData::String("".to_owned()));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_default_utf8_string() {
+    fn test_parse_default_utf8_string() -> Result<()> {
         let data: Vec<u8> = vec![0x4D, 0x80, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor).unwrap();
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::MuxingApp);
         assert_eq!(element_data, ElementData::String("".to_owned()));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_ebml_header() {
+    fn test_parse_ebml_header() -> Result<()> {
         let data: Vec<u8> = vec![
             0x1A, 0x45, 0xDF, 0xA3, 0xA2, 0x42, 0x86, 0x81, 0x01, 0x42, 0xF7, 0x81, 0x01, 0x42,
             0xF2, 0x81, 0x04, 0x42, 0xF3, 0x81, 0x08, 0x42, 0x82, 0x88, 0x6D, 0x61, 0x74, 0x72,
             0x6F, 0x73, 0x6B, 0x61, 0x42, 0x87, 0x81, 0x04, 0x42, 0x85, 0x81, 0x02,
         ];
         let mut cursor = Cursor::new(data);
-        let ebml_header = parse_ebml_header(&mut cursor).unwrap();
+        let ebml_header = parse_ebml_header(&mut cursor)?;
         assert_eq!(ebml_header.version, 1);
         assert_eq!(ebml_header.read_version, 1);
         assert_eq!(ebml_header.max_id_length, 4);
@@ -469,5 +525,7 @@ mod tests {
         assert_eq!(&ebml_header.doc_type, "matroska");
         assert_eq!(ebml_header.doc_type_version, 4);
         assert_eq!(ebml_header.doc_type_read_version, 2);
+
+        Ok(())
     }
 }

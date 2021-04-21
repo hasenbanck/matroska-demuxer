@@ -1,5 +1,9 @@
 #![warn(missing_docs)]
-//! A simple Matroska demuxer that can demux Matroska and WebM container files.
+#![deny(unused_results)]
+#![deny(clippy::as_conversions)]
+#![deny(clippy::panic)]
+#![deny(clippy::unwrap_used)]
+//! A Matroska demuxer that can demux Matroska and WebM container files.
 
 use std::io::{Read, Seek};
 

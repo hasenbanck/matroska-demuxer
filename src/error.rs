@@ -12,6 +12,8 @@ pub enum DemuxError {
     IoError(std::io::Error),
     /// A `std::string::FromUtf8Error`.
     FromUtf8Error(std::string::FromUtf8Error),
+    /// A `TryFromIntError`.
+    TryFromIntError(std::num::TryFromIntError),
     /// An invalid EBML Element ID was found.
     InvalidEbmlElementId,
     /// An invalid EBML data size was found.
@@ -20,6 +22,10 @@ pub enum DemuxError {
     InvalidEbmlHeader(String),
     /// Wrong float size.
     WrongFloatSize(u64),
+    /// Wrong integer size.
+    WrongIntegerSize(u64),
+    /// Wrong date size.
+    WrongDateSize(u64),
     /// Unsupported DocType.
     UnsupportedDocType(String),
     /// Unsupported DocTypeReadVersion.
@@ -39,6 +45,9 @@ impl std::fmt::Display for DemuxError {
             DemuxError::FromUtf8Error(err) => {
                 write!(f, "{:?}", err.source())
             }
+            DemuxError::TryFromIntError(err) => {
+                write!(f, "{:?}", err.source())
+            }
             DemuxError::InvalidEbmlElementId => {
                 write!(f, "invalid EBML Element ID was found")
             }
@@ -51,9 +60,19 @@ impl std::fmt::Display for DemuxError {
             DemuxError::WrongFloatSize(size) => {
                 write!(
                     f,
-                    "floats need to be either 4 or 7 bytes. found size of: {}",
+                    "floats need to be either 4 or 7 bytes. Found size of: {}",
                     size
                 )
+            }
+            DemuxError::WrongIntegerSize(size) => {
+                write!(
+                    f,
+                    "integers can be at most 8 bytes. Found size of: {}",
+                    size
+                )
+            }
+            DemuxError::WrongDateSize(size) => {
+                write!(f, "date can be at most 8 bytes. Found size of: {}", size)
             }
             DemuxError::UnsupportedDocType(doctype) => {
                 write!(
@@ -88,6 +107,12 @@ impl From<std::io::Error> for DemuxError {
 impl From<std::string::FromUtf8Error> for DemuxError {
     fn from(err: std::string::FromUtf8Error) -> DemuxError {
         DemuxError::FromUtf8Error(err)
+    }
+}
+
+impl From<std::num::TryFromIntError> for DemuxError {
+    fn from(err: std::num::TryFromIntError) -> DemuxError {
+        DemuxError::TryFromIntError(err)
     }
 }
 
