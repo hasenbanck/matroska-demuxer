@@ -2,7 +2,6 @@
 
 use std::error::Error;
 
-use crate::ebml::ElementData;
 use crate::element_id::ElementId;
 
 /// Errors that can occur when demuxing Matroska files.
@@ -33,7 +32,11 @@ pub enum DemuxError {
     /// Unexpected Element found.
     UnexpectedElement((ElementId, ElementId)),
     /// Unexpected data type found.
-    UnexpectedDataType(ElementData),
+    UnexpectedDataType,
+    /// Can't find the expected Element Id.
+    ElementNotFound(ElementId),
+    /// Can't find a cluster element.
+    CantFindCluster,
 }
 
 impl std::fmt::Display for DemuxError {
@@ -91,8 +94,14 @@ impl std::fmt::Display for DemuxError {
                     expected, found
                 )
             }
-            DemuxError::UnexpectedDataType(element) => {
-                write!(f, "unexpected data type found: {:?}", element)
+            DemuxError::UnexpectedDataType => {
+                write!(f, "unexpected data type found")
+            }
+            DemuxError::ElementNotFound(element_id) => {
+                write!(f, "can't find Element Id: {:?}", element_id)
+            }
+            DemuxError::CantFindCluster => {
+                write!(f, "can't find the first cluster element")
             }
         }
     }
@@ -121,6 +130,7 @@ impl std::error::Error for DemuxError {
         match *self {
             DemuxError::IoError(ref e) => Some(e),
             DemuxError::FromUtf8Error(ref e) => Some(e),
+            DemuxError::TryFromIntError(ref e) => Some(e),
             _ => None,
         }
     }

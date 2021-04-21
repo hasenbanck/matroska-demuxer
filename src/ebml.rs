@@ -30,38 +30,43 @@ pub enum ElementData {
 
 /// Parses and verifies the EBML header.
 pub(crate) fn parse_ebml_header<R: Read + Seek>(r: &mut R) -> Result<EbmlHeader> {
-    let (offset, _) = expect_master(r, ElementId::Ebml, None)?;
+    let (master_offset, master_size) = expect_master(r, ElementId::Ebml, None)?;
+    let master_children = collect_children(r, master_offset, master_size)?;
 
-    let version = expect_unsigned(r, ElementId::EbmlVersion, Some(offset))?;
-    let read_version = expect_unsigned(r, ElementId::EbmlReadVersion, None)?;
-    let max_id_length = expect_unsigned(r, ElementId::EbmlMaxIdLength, None)?;
-    let max_size_length = expect_unsigned(r, ElementId::EbmlMaxSizeLength, None)?;
-    let doc_type = expect_string(r, ElementId::DocType, None)?;
-    let doc_type_version = expect_unsigned(r, ElementId::DocTypeVersion, None)?;
-    let doc_type_read_version = expect_unsigned(r, ElementId::DocTypeReadVersion, None)?;
+    let header = EbmlHeader::new(&master_children)?;
 
-    if &doc_type != "matroska" && &doc_type != "webm" {
-        return Err(DemuxError::UnsupportedDocType(doc_type));
+    if header.doc_type != "matroska" && header.doc_type != "webm" {
+        return Err(DemuxError::InvalidEbmlHeader(format!(
+            "unsupported DocType: {}",
+            header.doc_type
+        )));
     }
 
-    if doc_type_read_version >= DEMUXER_DOC_TYPE_VERSION {
-        return Err(DemuxError::UnsupportedDocTypeReadVersion(
-            doc_type_read_version,
-        ));
+    if header.doc_type_read_version >= DEMUXER_DOC_TYPE_VERSION {
+        return Err(DemuxError::InvalidEbmlHeader(format!(
+            "unsupported DocTypeReadVersion: {}",
+            header.doc_type_read_version
+        )));
     }
 
-    Ok(EbmlHeader {
-        version,
-        read_version,
-        max_id_length,
-        max_size_length,
-        doc_type,
-        doc_type_version,
-        doc_type_read_version,
-    })
+    if header.max_id_length > 4 {
+        return Err(DemuxError::InvalidEbmlHeader(format!(
+            "unsupported MaxIdLength: {}",
+            header.max_id_length
+        )));
+    }
+
+    if header.max_size_length > 8 {
+        return Err(DemuxError::InvalidEbmlHeader(format!(
+            "unsupported MaxSizeLength: {}",
+            header.max_size_length
+        )));
+    }
+
+    Ok(header)
 }
 
-/// Tries to parse a given Element ID that returns a master element at the current location of the reader.
+/// Tries to parse an element with the given Element ID that returns a master element at the current location of the reader. Leaves the reader at the first byte after the master entry.
 pub(crate) fn expect_master<R: Read + Seek>(
     r: &mut R,
     expected_id: ElementId,
@@ -73,48 +78,89 @@ pub(crate) fn expect_master<R: Read + Seek>(
         return Err(DemuxError::UnexpectedElement((expected_id, element_id)));
     }
 
-    parse_location(r, size)
+    let offset = r.stream_position()?;
+    Ok((offset, size))
 }
 
-/// Tries to parse a given Element ID that returns a unsigned integer at the given location of the reader.
-pub(crate) fn expect_unsigned<R: Read + Seek>(
+/// Collects the children of a master element.
+pub(crate) fn collect_children<R: Read + Seek>(
     r: &mut R,
-    expected_id: ElementId,
-    from: Option<u64>,
+    offset: u64,
+    size: u64,
+) -> Result<Vec<(ElementId, ElementData)>> {
+    let mut children = Vec::with_capacity(16);
+    let _ = r.seek(SeekFrom::Start(offset))?;
+    let end = offset + size;
+
+    while r.stream_position()? < end {
+        let (element_id, element_data) = next_element_data(r)?;
+        children.push((element_id, element_data))
+    }
+
+    Ok(children)
+}
+
+/// Expects to find element with the an Element ID for an unsigned integer inside a list of children.
+pub(crate) fn find_unsigned(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
 ) -> Result<u64> {
-    let (element_id, size) = parse_element(r, from)?;
-
-    if element_id != expected_id {
-        return Err(DemuxError::UnexpectedElement((expected_id, element_id)));
-    }
-
-    parse_unsigned(r, size)
+    let value =
+        try_find_unsigned(fields, element_id)?.ok_or(DemuxError::ElementNotFound(element_id))?;
+    Ok(value)
 }
 
-/// Tries to parse a given Element ID that returns a string at the given location of the reader.
-pub(crate) fn expect_string<R: Read + Seek>(
-    r: &mut R,
-    expected_id: ElementId,
-    from: Option<u64>,
+/// Tries to find an element with the Element ID for an unsigned integer inside a list of children.
+pub(crate) fn try_find_unsigned(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<u64>> {
+    let value = if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+        if let ElementData::Unsigned(value) = data {
+            *value
+        } else {
+            return Err(DemuxError::UnexpectedDataType);
+        }
+    } else {
+        return Ok(None);
+    };
+    Ok(Some(value))
+}
+
+/// Expects to find an element with the Element ID for string inside a list of children.
+pub(crate) fn find_string(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
 ) -> Result<String> {
-    let (element_id, size) = parse_element(r, from)?;
-
-    if element_id != expected_id {
-        return Err(DemuxError::UnexpectedElement((expected_id, element_id)));
-    }
-
-    parse_string(r, size)
+    let value =
+        try_find_string(fields, element_id)?.ok_or(DemuxError::ElementNotFound(element_id))?;
+    Ok(value)
 }
 
-/// Parses the next element at the current location of the reader.
-pub(crate) fn next_element<R: Read + Seek>(r: &mut R) -> Result<(ElementId, ElementData)> {
+/// Tries to find an element with the Element ID for string inside a list of children.
+pub(crate) fn try_find_string(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<String>> {
+    let value = if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+        if let ElementData::String(value) = data {
+            value.clone()
+        } else {
+            return Err(DemuxError::UnexpectedDataType);
+        }
+    } else {
+        return Ok(None);
+    };
+    Ok(Some(value))
+}
+
+/// Parses the next Element at the current location of the reader and returns it's data.
+pub(crate) fn next_element_data<R: Read + Seek>(r: &mut R) -> Result<(ElementId, ElementData)> {
     let (element_id, size) = parse_element(r, None)?;
 
     let element_type = *ELEMENT_ID_TO_TYPE
         .get(&element_id)
         .unwrap_or(&ElementType::Unknown);
-
-    // TODO Default — The default value of the element to use if the parent element is present but this element is not.
 
     let element_data = match element_type {
         ElementType::Unknown => ElementData::Unknown,
@@ -157,25 +203,29 @@ pub(crate) fn parse_element<R: Read + Seek>(
     }
 
     let id = parse_element_id(r)?;
-    let size = parse_data_size(r)?;
-
     let element_id = *ID_TO_ELEMENT_ID.get(&id).unwrap_or(&ElementId::Unknown);
+
+    let size = parse_data_size(r)?;
 
     Ok((element_id, size))
 }
 
 /// Parses a variable length EBML Element ID.
 fn parse_element_id<R: Read>(r: &mut R) -> Result<u32> {
-    let mut bytes = [0u8];
-    r.read_exact(&mut bytes)?;
-    let element_id = match bytes[0] {
-        byte if (byte & 0x80) == 0x80 => byte.into(),
-        byte if (byte & 0xC0) == 0x40 => parse_id_value(r, byte, 1)?,
-        byte if (byte & 0xE0) == 0x20 => parse_id_value(r, byte, 2)?,
-        byte if (byte & 0xF0) == 0x10 => parse_id_value(r, byte, 3)?,
-        _ => return Err(DemuxError::InvalidEbmlElementId),
-    };
-    Ok(element_id)
+    loop {
+        let mut bytes = [0u8];
+        r.read_exact(&mut bytes)?;
+        let element_id = match bytes[0] {
+            // We keep reading bytes until we find a valid Element ID.
+            byte if (byte & 0xF0) == 0x00 => continue,
+            byte if (byte & 0x80) == 0x80 => byte.into(),
+            byte if (byte & 0xC0) == 0x40 => parse_id_value(r, byte, 1)?,
+            byte if (byte & 0xE0) == 0x20 => parse_id_value(r, byte, 2)?,
+            byte if (byte & 0xF0) == 0x10 => parse_id_value(r, byte, 3)?,
+            _ => return Err(DemuxError::InvalidEbmlElementId),
+        };
+        return Ok(element_id);
+    }
 }
 
 /// Parses a variable length EBML data size.
@@ -183,6 +233,7 @@ fn parse_data_size<R: Read>(r: &mut R) -> Result<u64> {
     let mut bytes = [0u8];
     r.read_exact(&mut bytes)?;
     let size = match bytes[0] {
+        byte if byte == 0xFF => u64::MAX,
         byte if (byte & 0x80) == 0x80 => (0x7F & byte).into(),
         byte if (byte & 0xC0) == 0x40 => parse_size_value(r, 0x3F & byte, 1)?,
         byte if (byte & 0xE0) == 0x20 => parse_size_value(r, 0x1F & byte, 2)?,
@@ -216,8 +267,11 @@ fn parse_size_value<R: Read>(r: &mut R, byte: u8, left: u8) -> Result<u64> {
 
 fn parse_location<R: Read + Seek>(r: &mut R, size: u64) -> Result<(u64, u64)> {
     let offset = r.stream_position()?;
-    // We skip the data and set the reader to the next element.
-    let _ = r.seek(SeekFrom::Start(offset + size))?;
+
+    // We skip the data and set the reader to the next element, if the size is known.
+    if size != u64::MAX {
+        let _ = r.seek(SeekFrom::Start(offset + size))?;
+    }
 
     Ok((offset, size))
 }
@@ -311,7 +365,7 @@ mod tests {
     fn test_parse_master_element() -> Result<()> {
         let data: Vec<u8> = vec![0x1A, 0x45, 0xDF, 0xA3, 0xA2];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::Ebml);
         assert_eq!(
             element_data,
@@ -328,7 +382,7 @@ mod tests {
     fn test_parse_unsigned() -> Result<()> {
         let data: Vec<u8> = vec![0x42, 0x86, 0x81, 0x01];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::EbmlVersion);
         assert_eq!(element_data, ElementData::Unsigned(1));
 
@@ -339,7 +393,7 @@ mod tests {
     fn test_parse_signed() -> Result<()> {
         let data: Vec<u8> = vec![0xFB, 0x82, 0xFF, 0xFB];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::ReferenceBlock);
         assert_eq!(element_data, ElementData::Signed(-5));
 
@@ -350,7 +404,7 @@ mod tests {
     fn test_parse_date() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x61, 0x84, 0xFF, 0xB3, 0xB4, 0xC0];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::DateUtc);
         assert_eq!(element_data, ElementData::Date(-5_000_000));
 
@@ -361,7 +415,7 @@ mod tests {
     fn test_parse_float_32() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x89, 0x84, 0x43, 0x1C, 0x20, 0x07];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
             assert!((x - 156.1251).abs() < 0.00001)
@@ -378,7 +432,7 @@ mod tests {
             0x44, 0x89, 0x88, 0x40, 0xA9, 0xE0, 0x43, 0x30, 0xBC, 0x60, 0x6E,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
             assert!((x - 3312.1312312).abs() < 0.00001)
@@ -395,7 +449,7 @@ mod tests {
             0x42, 0x82, 0x88, 0x6D, 0x61, 0x74, 0x72, 0x6F, 0x73, 0x6B, 0x61,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::DocType);
         assert_eq!(element_data, ElementData::String("matroska".to_owned()));
 
@@ -409,7 +463,7 @@ mod tests {
             0x90, 0xE3, 0x81, 0x8A, 0xE3, 0x81, 0x8B, 0xE3, 0x82, 0x86,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::MuxingApp);
         assert_eq!(
             element_data,
@@ -426,7 +480,7 @@ mod tests {
             0x90, 0xE3, 0x81, 0x8A, 0xE3, 0x81, 0x8B, 0xE3, 0x82, 0x86,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::CodecPrivate);
         assert_eq!(
             element_data,
@@ -443,7 +497,7 @@ mod tests {
     fn test_parse_default_unsigned() -> Result<()> {
         let data: Vec<u8> = vec![0x42, 0x86, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::EbmlVersion);
         assert_eq!(element_data, ElementData::Unsigned(0));
 
@@ -454,7 +508,7 @@ mod tests {
     fn test_parse_default_signed() -> Result<()> {
         let data: Vec<u8> = vec![0xFB, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::ReferenceBlock);
         assert_eq!(element_data, ElementData::Signed(0));
 
@@ -465,7 +519,7 @@ mod tests {
     fn test_parse_default_date() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x61, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::DateUtc);
         assert_eq!(element_data, ElementData::Date(0));
 
@@ -476,7 +530,7 @@ mod tests {
     fn test_parse_default_float() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x89, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
             assert!((x).abs() < 0.00001)
@@ -491,7 +545,7 @@ mod tests {
     fn test_parse_default_ascii_string() -> Result<()> {
         let data: Vec<u8> = vec![0x42, 0x82, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::DocType);
         assert_eq!(element_data, ElementData::String("".to_owned()));
 
@@ -502,7 +556,7 @@ mod tests {
     fn test_parse_default_utf8_string() -> Result<()> {
         let data: Vec<u8> = vec![0x4D, 0x80, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element(&mut cursor)?;
+        let (element_id, element_data) = next_element_data(&mut cursor)?;
         assert_eq!(element_id, ElementId::MuxingApp);
         assert_eq!(element_data, ElementData::String("".to_owned()));
 
@@ -518,8 +572,8 @@ mod tests {
         ];
         let mut cursor = Cursor::new(data);
         let ebml_header = parse_ebml_header(&mut cursor)?;
-        assert_eq!(ebml_header.version, 1);
-        assert_eq!(ebml_header.read_version, 1);
+        assert_eq!(ebml_header.version, Some(1));
+        assert_eq!(ebml_header.read_version, Some(1));
         assert_eq!(ebml_header.max_id_length, 4);
         assert_eq!(ebml_header.max_size_length, 8);
         assert_eq!(&ebml_header.doc_type, "matroska");

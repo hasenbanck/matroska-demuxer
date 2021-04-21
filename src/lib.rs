@@ -5,13 +5,18 @@
 #![deny(clippy::unwrap_used)]
 //! A Matroska demuxer that can demux Matroska and WebM container files.
 
-use std::io::{Read, Seek};
+use std::collections::HashMap;
+use std::convert::TryInto;
+use std::io::{Read, Seek, SeekFrom};
 
 pub use enums::*;
 pub use error::DemuxError;
 
-use crate::ebml::{expect_master, parse_ebml_header, parse_element};
-use crate::element_id::ElementId;
+use crate::ebml::{
+    collect_children, expect_master, find_string, find_unsigned, next_element_data,
+    parse_ebml_header, parse_element, try_find_unsigned, ElementData,
+};
+use crate::element_id::{ElementId, ID_TO_ELEMENT_ID};
 
 mod ebml;
 pub(crate) mod element_id;
@@ -23,8 +28,8 @@ type Result<T> = std::result::Result<T, DemuxError>;
 /// The EBML header of the file.
 #[derive(Clone, Debug)]
 pub struct EbmlHeader {
-    version: u64,
-    read_version: u64,
+    version: Option<u64>,
+    read_version: Option<u64>,
     max_id_length: u64,
     max_size_length: u64,
     doc_type: String,
@@ -33,13 +38,33 @@ pub struct EbmlHeader {
 }
 
 impl EbmlHeader {
+    pub(crate) fn new(fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let version = try_find_unsigned(fields, ElementId::EbmlVersion)?;
+        let read_version = try_find_unsigned(fields, ElementId::EbmlReadVersion)?;
+        let max_id_length = try_find_unsigned(fields, ElementId::EbmlMaxIdLength)?;
+        let max_size_length = try_find_unsigned(fields, ElementId::EbmlMaxSizeLength)?;
+        let doc_type = find_string(fields, ElementId::DocType)?;
+        let doc_type_version = find_unsigned(fields, ElementId::DocTypeVersion)?;
+        let doc_type_read_version = find_unsigned(fields, ElementId::DocTypeReadVersion)?;
+
+        Ok(Self {
+            version,
+            read_version,
+            max_id_length: max_id_length.unwrap_or(4),
+            max_size_length: max_size_length.unwrap_or(8),
+            doc_type,
+            doc_type_version,
+            doc_type_read_version,
+        })
+    }
+
     /// The EBML version used to create the file.
-    pub fn version(&self) -> u64 {
+    pub fn version(&self) -> Option<u64> {
         self.version
     }
 
     /// The minimum EBML version a parser has to support to read this file.
-    pub fn read_version(&self) -> u64 {
+    pub fn read_version(&self) -> Option<u64> {
         self.read_version
     }
 
@@ -69,26 +94,78 @@ impl EbmlHeader {
     }
 }
 
+/// An entry in the seek head.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SeekEntry {
+    id: ElementId,
+    offset: u64,
+}
+
+impl SeekEntry {
+    pub(crate) fn new(fields: &[(ElementId, ElementData)]) -> Result<SeekEntry> {
+        let id: u32 = find_unsigned(fields, ElementId::SeekId)?.try_into()?;
+        let id = *ID_TO_ELEMENT_ID.get(&id).unwrap_or(&ElementId::Unknown);
+        let offset = find_unsigned(fields, ElementId::SeekPosition)?;
+
+        Ok(Self { id, offset })
+    }
+}
+
 /// Demuxer for Matroska files.
 #[derive(Clone, Debug)]
 pub struct MatroskaFile<R> {
     file: R,
     ebml_header: EbmlHeader,
+    seek_head: HashMap<ElementId, u64>,
 }
 
 impl<R: Read + Seek> MatroskaFile<R> {
-    /// Opens a Matroska file. Also verifies the EBML header.
+    /// Opens a Matroska file.
     pub fn open(mut file: R) -> Result<Self> {
         let ebml_header = parse_ebml_header(&mut file)?;
-        let (segment_offset, _) = expect_master(&mut file, ElementId::Segment, None)?;
-        let seek_head_offset = search_seek_head(&mut file, segment_offset)?;
+        let (segment_data_offset, _) = expect_master(&mut file, ElementId::Segment, None)?;
+        let optional_seek_head = search_seek_head(&mut file, segment_data_offset)?;
 
-        dbg!(seek_head_offset);
+        let mut seek_head = HashMap::new();
 
-        // TODO if found, parse the seek head ->  There can be two seek heads. The first seek head could points to a CLUSTER seek head (with only cluster entries).
-        // TODO if not found, build the seek head ourself (iterate through all top level elements and build an index, build a cluster seek head too).
+        if let Some((seek_head_data_offset, seek_head_data_size)) = optional_seek_head {
+            let seek_head_entries =
+                collect_children(&mut file, seek_head_data_offset, seek_head_data_size)?;
 
-        Ok(Self { file, ebml_header })
+            for (entry_id, entry_data) in &seek_head_entries {
+                if let ElementId::Seek = entry_id {
+                    if let ElementData::Location { offset, size } = entry_data {
+                        let seek_fields = collect_children(&mut file, *offset, *size)?;
+                        if let Ok(seek_entry) = SeekEntry::new(&seek_fields) {
+                            let _ = seek_head
+                                .insert(seek_entry.id, segment_data_offset + seek_entry.offset);
+                        }
+                    }
+                }
+            }
+        }
+
+        if seek_head.is_empty() {
+            build_seek_head(&mut file, segment_data_offset, &mut seek_head)?;
+        }
+
+        if seek_head.get(&ElementId::Cluster).is_none() {
+            find_first_cluster_offset(&mut file, segment_data_offset, &mut seek_head)?;
+        }
+
+        // TODO parse the Info element
+        // TODO parse the Tracks element
+        // TODO parse Cues element
+
+        // TODO how to parse blocks and how to do seeking?
+
+        // TODO lazy loading: Chapters, Tagging
+
+        Ok(Self {
+            file,
+            ebml_header,
+            seek_head,
+        })
     }
 
     /// Returns the EBML header.
@@ -99,18 +176,107 @@ impl<R: Read + Seek> MatroskaFile<R> {
 
 /// Seeks the SeekHead element and returns the offset into to it when present.
 ///
-/// Specification states that the first non CRC-32 element
-/// should be a SeekHead if present.
-fn search_seek_head<R: Read + Seek>(r: &mut R, offset: u64) -> Result<Option<u64>> {
+/// Specification states that the first non CRC-32 element should be a SeekHead if present.
+fn search_seek_head<R: Read + Seek>(
+    r: &mut R,
+    segment_data_offset: u64,
+) -> Result<Option<(u64, u64)>> {
     loop {
-        let (element_id, _) = parse_element(r, Some(offset))?;
+        let (element_id, size) = parse_element(r, Some(segment_data_offset))?;
         match element_id {
             ElementId::SeekHead => {
                 let current_pos = r.stream_position()?;
-                return Ok(Some(current_pos));
+                return Ok(Some((current_pos, size)));
             }
             ElementId::Crc32 => continue,
             _ => return Ok(None),
         }
     }
+}
+
+/// Build a SeekHead by parsing the top level entries.
+fn build_seek_head<R: Read + Seek>(
+    r: &mut R,
+    segment_data_offset: u64,
+    seek_head: &mut HashMap<ElementId, u64>,
+) -> Result<()> {
+    let _ = r.seek(SeekFrom::Start(segment_data_offset))?;
+    loop {
+        let position = r.stream_position()?;
+        match next_element_data(r) {
+            Ok((element_id, element_data)) => {
+                if element_id == ElementId::Info
+                    || element_id == ElementId::Tracks
+                    || element_id == ElementId::Chapters
+                    || element_id == ElementId::Cues
+                    || element_id == ElementId::Tags
+                    || element_id == ElementId::Cluster
+                {
+                    // We only need the first cluster entry.
+                    if element_id != ElementId::Cluster
+                        || !seek_head.contains_key(&ElementId::Cluster)
+                    {
+                        let _ = seek_head.insert(element_id, position);
+                    }
+                }
+
+                if let ElementData::Location { offset, size } = element_data {
+                    if size == u64::MAX {
+                        // No path left to walk on this level.
+                        break;
+                    }
+                    let _ = r.seek(SeekFrom::Start(offset + size))?;
+                }
+            }
+            Err(_) => {
+                // EOF or damaged file. We will stop looking for top level entries.
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Tries to find the offset of the first cluster and save it in the SeekHead.
+fn find_first_cluster_offset<R: Read + Seek>(
+    r: &mut R,
+    segment_offset: u64,
+    seek_head: &mut HashMap<ElementId, u64>,
+) -> Result<()> {
+    let (tracks_offset, tracks_size) = if let Some(offset) = seek_head.get(&ElementId::Tracks) {
+        expect_master(r, ElementId::Tracks, Some(*offset))?
+    } else {
+        return Err(DemuxError::CantFindCluster);
+    };
+
+    let _ = r.seek(SeekFrom::Start(tracks_offset + tracks_size))?;
+    loop {
+        match next_element_data(r) {
+            Ok((element_id, element_data)) => {
+                if let ElementId::Cluster = element_id {
+                    if let ElementData::Location { offset, .. } = element_data {
+                        let _ = seek_head.insert(ElementId::Cluster, segment_offset + offset);
+                        break;
+                    } else {
+                        return Err(DemuxError::UnexpectedDataType);
+                    }
+                }
+
+                if let ElementData::Location { offset, size } = element_data {
+                    if size == u64::MAX {
+                        // No path left to walk on this level.
+                        return Err(DemuxError::CantFindCluster);
+                    }
+                    let _ = r.seek(SeekFrom::Start(offset + size))?;
+                }
+            }
+            Err(_) => {
+                // EOF or damaged file. We will stop looking for top level entries.
+                return Err(DemuxError::CantFindCluster);
+            }
+        }
+    }
+
+    Ok(())
 }
