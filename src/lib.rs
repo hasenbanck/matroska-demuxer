@@ -8,13 +8,15 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::io::{Read, Seek, SeekFrom};
+use std::num::NonZeroU64;
 
 pub use enums::*;
 pub use error::DemuxError;
 
 use crate::ebml::{
-    collect_children, expect_master, find_string, find_unsigned, next_element_data,
-    parse_ebml_header, parse_element, try_find_unsigned, ElementData,
+    collect_children, expect_master, find_string, find_unsigned, next_element, parse_ebml_header,
+    parse_element_header, try_find_date, try_find_float, try_find_string, try_find_unsigned,
+    ElementData,
 };
 use crate::element_id::{ElementId, ID_TO_ELEMENT_ID};
 
@@ -111,12 +113,84 @@ impl SeekEntry {
     }
 }
 
+/// The Info element.
+#[derive(Clone, Debug)]
+pub struct Info {
+    timestamp_scale: NonZeroU64,
+    duration: Option<f64>,
+    date_utc: Option<i64>,
+    title: Option<String>,
+    muxing_app: String,
+    writing_app: String,
+}
+
+impl Info {
+    pub(crate) fn new(fields: &[(ElementId, ElementData)]) -> Result<Info> {
+        let timestamp_scale = try_find_unsigned(fields, ElementId::TimestampScale)?;
+        let duration = try_find_float(fields, ElementId::Duration)?;
+        let date_utc = try_find_date(fields, ElementId::DateUtc)?;
+        let title = try_find_string(fields, ElementId::Title)?;
+        let muxing_app = find_string(fields, ElementId::MuxingApp)?;
+        let writing_app = find_string(fields, ElementId::WritingApp)?;
+
+        let timestamp_scale = timestamp_scale.unwrap_or(1000000);
+        let timestamp_scale = NonZeroU64::new(timestamp_scale)
+            .ok_or(DemuxError::NonZeroValueIsZero(ElementId::TimestampScale))?;
+
+        Ok(Self {
+            timestamp_scale,
+            duration,
+            date_utc,
+            title,
+            muxing_app,
+            writing_app,
+        })
+    }
+
+    /// Timestamp scale in nanoseconds (1_000_000 means all timestamps in the Segment are expressed in milliseconds).
+    pub fn timestamp_scale(&self) -> &NonZeroU64 {
+        &self.timestamp_scale
+    }
+
+    /// Duration of the Segment in nanoseconds based on TimestampScale.
+    pub fn duration(&self) -> &Option<f64> {
+        &self.duration
+    }
+
+    /// The date and time that the Segment was created by the muxing application or library.
+    pub fn date_utc(&self) -> &Option<i64> {
+        &self.date_utc
+    }
+
+    /// General name of the Segment.
+    pub fn title(&self) -> &Option<String> {
+        &self.title
+    }
+
+    /// Muxing application or library.
+    pub fn muxing_app(&self) -> &String {
+        &self.muxing_app
+    }
+
+    /// Writing  application.
+    pub fn writing_app(&self) -> &String {
+        &self.writing_app
+    }
+}
+
+// Track
+// - Video
+// - Audio
+// - Colour
+// - ContentEncoding
+
 /// Demuxer for Matroska files.
 #[derive(Clone, Debug)]
 pub struct MatroskaFile<R> {
     file: R,
     ebml_header: EbmlHeader,
     seek_head: HashMap<ElementId, u64>,
+    info: Info,
 }
 
 impl<R: Read + Seek> MatroskaFile<R> {
@@ -153,11 +227,13 @@ impl<R: Read + Seek> MatroskaFile<R> {
             find_first_cluster_offset(&mut file, segment_data_offset, &mut seek_head)?;
         }
 
-        // TODO parse the Info element
+        let info = parse_segment_info(&mut file, &mut seek_head)?;
+
         // TODO parse the Tracks element
         // TODO parse Cues element
 
         // TODO how to parse blocks and how to do seeking?
+        // TODO we could add a BTreeMap and store the Cues in it. If no Cues have been found, we could (re-)build them too, if asked for (open(file: &mut File, build_cues: Bool)
 
         // TODO lazy loading: Chapters, Tagging
 
@@ -165,12 +241,18 @@ impl<R: Read + Seek> MatroskaFile<R> {
             file,
             ebml_header,
             seek_head,
+            info,
         })
     }
 
     /// Returns the EBML header.
     pub fn ebml_header(&self) -> &EbmlHeader {
         &self.ebml_header
+    }
+
+    /// Returns the segment info.
+    pub fn info(&self) -> &Info {
+        &self.info
     }
 }
 
@@ -182,7 +264,7 @@ fn search_seek_head<R: Read + Seek>(
     segment_data_offset: u64,
 ) -> Result<Option<(u64, u64)>> {
     loop {
-        let (element_id, size) = parse_element(r, Some(segment_data_offset))?;
+        let (element_id, size) = parse_element_header(r, Some(segment_data_offset))?;
         match element_id {
             ElementId::SeekHead => {
                 let current_pos = r.stream_position()?;
@@ -203,7 +285,7 @@ fn build_seek_head<R: Read + Seek>(
     let _ = r.seek(SeekFrom::Start(segment_data_offset))?;
     loop {
         let position = r.stream_position()?;
-        match next_element_data(r) {
+        match next_element(r) {
             Ok((element_id, element_data)) => {
                 if element_id == ElementId::Info
                     || element_id == ElementId::Tracks
@@ -252,7 +334,7 @@ fn find_first_cluster_offset<R: Read + Seek>(
 
     let _ = r.seek(SeekFrom::Start(tracks_offset + tracks_size))?;
     loop {
-        match next_element_data(r) {
+        match next_element(r) {
             Ok((element_id, element_data)) => {
                 if let ElementId::Cluster = element_id {
                     if let ElementData::Location { offset, .. } = element_data {
@@ -279,4 +361,19 @@ fn find_first_cluster_offset<R: Read + Seek>(
     }
 
     Ok(())
+}
+
+fn parse_segment_info<R: Read + Seek>(
+    mut file: &mut R,
+    seek_head: &mut HashMap<ElementId, u64>,
+) -> Result<Info> {
+    if let Some(info_offset) = seek_head.get(&ElementId::Info) {
+        let (info_data_offset, info_data_size) =
+            expect_master(&mut file, ElementId::Info, Some(*info_offset))?;
+        let children = collect_children(&mut file, info_data_offset, info_data_size)?;
+        let info = Info::new(&children)?;
+        Ok(info)
+    } else {
+        Err(DemuxError::ElementNotFound(ElementId::Info))
+    }
 }

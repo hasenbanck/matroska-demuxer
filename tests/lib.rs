@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::num::NonZeroU64;
 
 use matroska_demux::MatroskaFile;
 
@@ -20,6 +21,18 @@ pub fn parse_test1_mkv() {
     assert_eq!(mkv.ebml_header().doc_type_read_version(), 2);
     assert_eq!(mkv.ebml_header().max_id_length(), 4);
     assert_eq!(mkv.ebml_header().max_size_length(), 8);
+
+    assert_eq!(
+        *mkv.info().timestamp_scale(),
+        NonZeroU64::new(1000000).unwrap()
+    );
+    assert!((87336.0 - mkv.info().duration().unwrap()).abs() < f64::EPSILON);
+    assert_eq!(
+        mkv.info().muxing_app(),
+        "libebml2 v0.10.0 + libmatroska2 v0.10.1"
+    );
+    assert_eq!(mkv.info().date_utc().unwrap(), 304068183000000000);
+    assert_eq!(mkv.info().writing_app(), "mkclean 0.5.5 ru from libebml v1.0.0 + libmatroska v1.0.0 + mkvmerge v4.1.1 ('Bouncin' Back') built on Jul  3 2010 22:54:08");
 }
 
 #[test]
@@ -34,6 +47,13 @@ pub fn parse_test2_mkv() {
     assert_eq!(mkv.ebml_header().doc_type_read_version(), 2);
     assert_eq!(mkv.ebml_header().max_id_length(), 4);
     assert_eq!(mkv.ebml_header().max_size_length(), 8);
+
+    assert_eq!(
+        *mkv.info().timestamp_scale(),
+        NonZeroU64::new(100000).unwrap()
+    );
+    assert!((475090.0 - mkv.info().duration().unwrap()).abs() < f64::EPSILON);
+    assert_eq!(mkv.info().date_utc().unwrap(), 328711520000000000);
 }
 
 #[test]
@@ -48,6 +68,13 @@ pub fn parse_test3_mkv() {
     assert_eq!(mkv.ebml_header().doc_type_read_version(), 2);
     assert_eq!(mkv.ebml_header().max_id_length(), 4);
     assert_eq!(mkv.ebml_header().max_size_length(), 8);
+
+    assert_eq!(
+        *mkv.info().timestamp_scale(),
+        NonZeroU64::new(1000000).unwrap()
+    );
+    assert!((49064.0 - mkv.info().duration().unwrap()).abs() < f64::EPSILON);
+    assert_eq!(mkv.info().date_utc().unwrap(), 304119805000000000);
 }
 
 #[test]
@@ -62,6 +89,12 @@ pub fn parse_test4_mkv() {
     assert_eq!(mkv.ebml_header().doc_type_read_version(), 1);
     assert_eq!(mkv.ebml_header().max_id_length(), 4);
     assert_eq!(mkv.ebml_header().max_size_length(), 8);
+
+    assert_eq!(
+        *mkv.info().timestamp_scale(),
+        NonZeroU64::new(1000000).unwrap()
+    );
+    assert_eq!(mkv.info().date_utc().unwrap(), 304072935000000000);
 }
 
 #[test]
@@ -76,6 +109,13 @@ pub fn parse_test5_mkv() {
     assert_eq!(mkv.ebml_header().doc_type_read_version(), 2);
     assert_eq!(mkv.ebml_header().max_id_length(), 4);
     assert_eq!(mkv.ebml_header().max_size_length(), 8);
+
+    assert_eq!(
+        *mkv.info().timestamp_scale(),
+        NonZeroU64::new(1000000).unwrap()
+    );
+    assert!((46665.0 - mkv.info().duration().unwrap()).abs() < f64::EPSILON);
+    assert_eq!(mkv.info().date_utc().unwrap(), 304106803000000000);
 }
 
 #[test]
@@ -85,6 +125,13 @@ pub fn parse_test6_mkv() {
 
     assert_eq!(mkv.ebml_header().max_id_length(), 4);
     assert_eq!(mkv.ebml_header().max_size_length(), 8);
+
+    assert_eq!(
+        *mkv.info().timestamp_scale(),
+        NonZeroU64::new(1000000).unwrap()
+    );
+    assert!((87336.0 - mkv.info().duration().unwrap()).abs() < f64::EPSILON);
+    assert_eq!(mkv.info().date_utc().unwrap(), 304101115000000000);
 }
 
 #[test]
@@ -99,6 +146,13 @@ pub fn parse_test7_mkv() {
     assert_eq!(mkv.ebml_header().doc_type_read_version(), 2);
     assert_eq!(mkv.ebml_header().max_id_length(), 4);
     assert_eq!(mkv.ebml_header().max_size_length(), 8);
+
+    assert_eq!(
+        *mkv.info().timestamp_scale(),
+        NonZeroU64::new(1000000).unwrap()
+    );
+    assert!((37043.0 - mkv.info().duration().unwrap()).abs() < f64::EPSILON);
+    assert_eq!(mkv.info().date_utc().unwrap(), 304102823000000000);
 }
 
 #[test]
@@ -113,4 +167,11 @@ pub fn parse_test8_mkv() {
     assert_eq!(mkv.ebml_header().doc_type_read_version(), 2);
     assert_eq!(mkv.ebml_header().max_id_length(), 4);
     assert_eq!(mkv.ebml_header().max_size_length(), 8);
+
+    assert_eq!(
+        *mkv.info().timestamp_scale(),
+        NonZeroU64::new(1000000).unwrap()
+    );
+    assert!((47341.0 - mkv.info().duration().unwrap()).abs() < f64::EPSILON);
+    assert_eq!(mkv.info().date_utc().unwrap(), 304104134000000000);
 }

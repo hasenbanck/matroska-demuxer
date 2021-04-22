@@ -12,8 +12,6 @@ const DEMUXER_DOC_TYPE_VERSION: u64 = 4;
 /// The data an element can contain.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ElementData {
-    /// Unknown element data.
-    Unknown,
     /// Returns the offset and size of the data.
     Location { offset: u64, size: u64 },
     /// Unsigned integer.
@@ -72,7 +70,7 @@ pub(crate) fn expect_master<R: Read + Seek>(
     expected_id: ElementId,
     from: Option<u64>,
 ) -> Result<(u64, u64)> {
-    let (element_id, size) = parse_element(r, from)?;
+    let (element_id, size) = parse_element_header(r, from)?;
 
     if element_id != expected_id {
         return Err(DemuxError::UnexpectedElement((expected_id, element_id)));
@@ -93,8 +91,18 @@ pub(crate) fn collect_children<R: Read + Seek>(
     let end = offset + size;
 
     while r.stream_position()? < end {
-        let (element_id, element_data) = next_element_data(r)?;
-        children.push((element_id, element_data))
+        let (element_id, element_data) = next_element(r)?;
+
+        if let ElementData::Location { offset, size } = element_data {
+            if size == u64::MAX {
+                break;
+            }
+            let _ = r.seek(SeekFrom::Start(offset + size))?;
+        }
+
+        if element_id != ElementId::Unknown {
+            children.push((element_id, element_data))
+        }
     }
 
     Ok(children)
@@ -127,7 +135,24 @@ pub(crate) fn try_find_unsigned(
     Ok(Some(value))
 }
 
-/// Expects to find an element with the Element ID for string inside a list of children.
+/// Tries to find an element with the Element ID for a float inside a list of children.
+pub(crate) fn try_find_float(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<f64>> {
+    let value = if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+        if let ElementData::Float(value) = data {
+            *value
+        } else {
+            return Err(DemuxError::UnexpectedDataType);
+        }
+    } else {
+        return Ok(None);
+    };
+    Ok(Some(value))
+}
+
+/// Expects to find an element with the Element ID for a string inside a list of children.
 pub(crate) fn find_string(
     fields: &[(ElementId, ElementData)],
     element_id: ElementId,
@@ -137,7 +162,7 @@ pub(crate) fn find_string(
     Ok(value)
 }
 
-/// Tries to find an element with the Element ID for string inside a list of children.
+/// Tries to find an element with the Element ID for a string inside a list of children.
 pub(crate) fn try_find_string(
     fields: &[(ElementId, ElementData)],
     element_id: ElementId,
@@ -154,17 +179,33 @@ pub(crate) fn try_find_string(
     Ok(Some(value))
 }
 
+/// Tries to find an element with the Element ID for a date inside a list of children.
+pub(crate) fn try_find_date(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<i64>> {
+    let value = if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+        if let ElementData::Date(value) = data {
+            *value
+        } else {
+            return Err(DemuxError::UnexpectedDataType);
+        }
+    } else {
+        return Ok(None);
+    };
+    Ok(Some(value))
+}
+
 /// Parses the next Element at the current location of the reader and returns it's data.
-pub(crate) fn next_element_data<R: Read + Seek>(r: &mut R) -> Result<(ElementId, ElementData)> {
-    let (element_id, size) = parse_element(r, None)?;
+pub(crate) fn next_element<R: Read + Seek>(r: &mut R) -> Result<(ElementId, ElementData)> {
+    let (element_id, size) = parse_element_header(r, None)?;
 
     let element_type = *ELEMENT_ID_TO_TYPE
         .get(&element_id)
         .unwrap_or(&ElementType::Unknown);
 
     let element_data = match element_type {
-        ElementType::Unknown => ElementData::Unknown,
-        ElementType::Master | ElementType::Binary => {
+        ElementType::Master | ElementType::Binary | ElementType::Unknown => {
             let (offset, size) = parse_location(r, size)?;
             ElementData::Location { offset, size }
         }
@@ -194,7 +235,7 @@ pub(crate) fn next_element_data<R: Read + Seek>(r: &mut R) -> Result<(ElementId,
 }
 
 /// Parses the next element from the given location inside the reader. Returns the Element ID and the size of the data.
-pub(crate) fn parse_element<R: Read + Seek>(
+pub(crate) fn parse_element_header<R: Read + Seek>(
     r: &mut R,
     from: Option<u64>,
 ) -> Result<(ElementId, u64)> {
@@ -365,7 +406,7 @@ mod tests {
     fn test_parse_master_element() -> Result<()> {
         let data: Vec<u8> = vec![0x1A, 0x45, 0xDF, 0xA3, 0xA2];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::Ebml);
         assert_eq!(
             element_data,
@@ -382,7 +423,7 @@ mod tests {
     fn test_parse_unsigned() -> Result<()> {
         let data: Vec<u8> = vec![0x42, 0x86, 0x81, 0x01];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::EbmlVersion);
         assert_eq!(element_data, ElementData::Unsigned(1));
 
@@ -393,7 +434,7 @@ mod tests {
     fn test_parse_signed() -> Result<()> {
         let data: Vec<u8> = vec![0xFB, 0x82, 0xFF, 0xFB];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::ReferenceBlock);
         assert_eq!(element_data, ElementData::Signed(-5));
 
@@ -404,7 +445,7 @@ mod tests {
     fn test_parse_date() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x61, 0x84, 0xFF, 0xB3, 0xB4, 0xC0];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::DateUtc);
         assert_eq!(element_data, ElementData::Date(-5_000_000));
 
@@ -415,7 +456,7 @@ mod tests {
     fn test_parse_float_32() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x89, 0x84, 0x43, 0x1C, 0x20, 0x07];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
             assert!((x - 156.1251).abs() < 0.00001)
@@ -432,7 +473,7 @@ mod tests {
             0x44, 0x89, 0x88, 0x40, 0xA9, 0xE0, 0x43, 0x30, 0xBC, 0x60, 0x6E,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
             assert!((x - 3312.1312312).abs() < 0.00001)
@@ -449,7 +490,7 @@ mod tests {
             0x42, 0x82, 0x88, 0x6D, 0x61, 0x74, 0x72, 0x6F, 0x73, 0x6B, 0x61,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::DocType);
         assert_eq!(element_data, ElementData::String("matroska".to_owned()));
 
@@ -463,7 +504,7 @@ mod tests {
             0x90, 0xE3, 0x81, 0x8A, 0xE3, 0x81, 0x8B, 0xE3, 0x82, 0x86,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::MuxingApp);
         assert_eq!(
             element_data,
@@ -480,7 +521,7 @@ mod tests {
             0x90, 0xE3, 0x81, 0x8A, 0xE3, 0x81, 0x8B, 0xE3, 0x82, 0x86,
         ];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::CodecPrivate);
         assert_eq!(
             element_data,
@@ -497,7 +538,7 @@ mod tests {
     fn test_parse_default_unsigned() -> Result<()> {
         let data: Vec<u8> = vec![0x42, 0x86, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::EbmlVersion);
         assert_eq!(element_data, ElementData::Unsigned(0));
 
@@ -508,7 +549,7 @@ mod tests {
     fn test_parse_default_signed() -> Result<()> {
         let data: Vec<u8> = vec![0xFB, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::ReferenceBlock);
         assert_eq!(element_data, ElementData::Signed(0));
 
@@ -519,7 +560,7 @@ mod tests {
     fn test_parse_default_date() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x61, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::DateUtc);
         assert_eq!(element_data, ElementData::Date(0));
 
@@ -530,7 +571,7 @@ mod tests {
     fn test_parse_default_float() -> Result<()> {
         let data: Vec<u8> = vec![0x44, 0x89, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
             assert!((x).abs() < 0.00001)
@@ -545,7 +586,7 @@ mod tests {
     fn test_parse_default_ascii_string() -> Result<()> {
         let data: Vec<u8> = vec![0x42, 0x82, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::DocType);
         assert_eq!(element_data, ElementData::String("".to_owned()));
 
@@ -556,7 +597,7 @@ mod tests {
     fn test_parse_default_utf8_string() -> Result<()> {
         let data: Vec<u8> = vec![0x4D, 0x80, 0x80];
         let mut cursor = Cursor::new(data);
-        let (element_id, element_data) = next_element_data(&mut cursor)?;
+        let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::MuxingApp);
         assert_eq!(element_data, ElementData::String("".to_owned()));
 

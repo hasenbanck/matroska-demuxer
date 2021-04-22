@@ -29,14 +29,16 @@ pub enum DemuxError {
     UnsupportedDocType(String),
     /// Unsupported DocTypeReadVersion.
     UnsupportedDocTypeReadVersion(u64),
-    /// Unexpected Element found.
+    /// Unexpected element found.
     UnexpectedElement((ElementId, ElementId)),
     /// Unexpected data type found.
     UnexpectedDataType,
-    /// Can't find the expected Element Id.
+    /// Can't find the expected element.
     ElementNotFound(ElementId),
     /// Can't find a cluster element.
     CantFindCluster,
+    /// A value that should not be zero was zero.
+    NonZeroValueIsZero(ElementId),
 }
 
 impl std::fmt::Display for DemuxError {
@@ -98,10 +100,17 @@ impl std::fmt::Display for DemuxError {
                 write!(f, "unexpected data type found")
             }
             DemuxError::ElementNotFound(element_id) => {
-                write!(f, "can't find Element Id: {:?}", element_id)
+                write!(f, "can't find Element: {:?}", element_id)
             }
             DemuxError::CantFindCluster => {
                 write!(f, "can't find the first cluster element")
+            }
+            DemuxError::NonZeroValueIsZero(element_id) => {
+                write!(
+                    f,
+                    "a value that should not be zero was zero.: {:?}",
+                    element_id
+                )
             }
         }
     }
