@@ -2,12 +2,12 @@
 name = "matroska-demux"
 version = "0.0.1"
 authors = ["Nils Hasenbanck <nils@hasenbanck.de>"]
-description = "A Matroska demuxer that can demux Matroska and WebM container files."
+description = "A demuxer that can demux Matroska and WebM container files."
 license = "Zlib OR MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/hasenbanck/matroska-demux"
 categories = ["multimedia"]
-keywords = ["matroska", "qebm", "demuxer", "demux"]
+keywords = ["matroska", "webm", "demuxer", "demux"]
 edition = "2018"
 
 [dependencies]

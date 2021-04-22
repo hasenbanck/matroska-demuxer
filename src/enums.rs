@@ -3,6 +3,7 @@
 /// The Matrix Coefficients of the video used to derive luma and chroma values
 /// from red, green, and blue color primaries. For clarity, the value and meanings
 /// for `MatrixCoefficients` are adopted from Table 4 of ISO/IEC 23001-8:2016 or ITU-T H.273.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MatrixCoefficients {
     /// Unknown,
     Unknown,
@@ -56,6 +57,7 @@ impl From<u64> for MatrixCoefficients {
 }
 
 /// How `DisplayWidth` & `DisplayHeight` are interpreted.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DisplayUnit {
     /// In pixels.
     Pixels,
@@ -82,6 +84,7 @@ impl From<u64> for DisplayUnit {
 }
 
 /// Specify the possible modifications to the aspect ratio.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AspectRatioType {
     /// Unknown.
     Unknown,
@@ -105,6 +108,7 @@ impl From<u64> for AspectRatioType {
 }
 
 /// Type of the track.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TrackType {
     /// Unknown.
     Unknown,
@@ -143,6 +147,7 @@ impl From<u64> for TrackType {
 }
 
 /// A flag to declare if the video is known to be progressive or interlaced.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FlagInterlaced {
     /// Unknown.
     Unknown,
@@ -163,6 +168,7 @@ impl From<u64> for FlagInterlaced {
 }
 
 /// Declare the field ordering of the video.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FieldOrder {
     /// Unknown.
     Unknown,
@@ -192,6 +198,7 @@ impl From<u64> for FieldOrder {
 }
 
 /// Stereo-3D video mode.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StereoMode {
     /// Unknown.
     Unknown,
@@ -251,6 +258,7 @@ impl From<u64> for StereoMode {
 }
 
 /// How chroma is sub sampled horizontally.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChromaSitingHorz {
     /// Unknown.
     Unknown,
@@ -271,6 +279,7 @@ impl From<u64> for ChromaSitingHorz {
 }
 
 /// How chroma is sub sampled vertically.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChromaSitingVert {
     /// Unknown.
     Unknown,
@@ -291,6 +300,7 @@ impl From<u64> for ChromaSitingVert {
 }
 
 /// Clipping of the color ranges.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Range {
     /// Unknown.
     Unknown,
@@ -315,6 +325,7 @@ impl From<u64> for Range {
 
 /// The transfer characteristics of the video. For clarity, the value and meanings
 /// for `TransferCharacteristics` are adopted from Table 3 of ISO/IEC 23091-4 or ITU-T H.273.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TransferCharacteristics {
     /// Unknown.
     Unknown,
@@ -378,6 +389,7 @@ impl From<u64> for TransferCharacteristics {
 
 /// The colour primaries of the video. For clarity, the value and meanings
 /// for Primaries are adopted from Table 2 of ISO/IEC 23091-4 or ITU-T H.273.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Primaries {
     /// Unknown.
     Unknown,
@@ -425,6 +437,7 @@ impl From<u64> for Primaries {
 }
 
 /// Describes which Elements have been modified in this way.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ContentEncodingScope {
     /// Unknown.
     Unknown,
@@ -448,6 +461,7 @@ impl From<u64> for ContentEncodingScope {
 }
 
 /// Describing what kind of transformation is applied.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ContentEncodingType {
     /// Unknown.
     Unknown,
@@ -468,6 +482,7 @@ impl From<u64> for ContentEncodingType {
 }
 
 /// The encryption algorithm used. `NotEncrypted` means that the contents have not been encrypted but only signed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ContentEncAlgo {
     /// Unknown.
     Unknown,
@@ -500,6 +515,7 @@ impl From<u64> for ContentEncAlgo {
 }
 
 /// The AES cipher mode used in the encryption.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AesSettingsCipherMode {
     /// Unknown.
     Unknown,
@@ -520,6 +536,7 @@ impl From<u64> for AesSettingsCipherMode {
 }
 
 /// The value of a simple tag.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SimpleTagValue {
     /// Unicode string.
     String(String),

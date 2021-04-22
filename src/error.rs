@@ -39,6 +39,8 @@ pub enum DemuxError {
     CantFindCluster,
     /// A value that should not be zero was zero.
     NonZeroValueIsZero(ElementId),
+    /// A value that should be positive is not positive.
+    PositiveValueIsNotPositive,
 }
 
 impl std::fmt::Display for DemuxError {
@@ -108,9 +110,12 @@ impl std::fmt::Display for DemuxError {
             DemuxError::NonZeroValueIsZero(element_id) => {
                 write!(
                     f,
-                    "a value that should not be zero was zero.: {:?}",
+                    "a value that should not be zero was zero: {:?}",
                     element_id
                 )
+            }
+            DemuxError::PositiveValueIsNotPositive => {
+                write!(f, "a value that should be positive is not positive")
             }
         }
     }

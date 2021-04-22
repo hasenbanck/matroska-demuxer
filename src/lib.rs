@@ -3,7 +3,7 @@
 #![deny(clippy::as_conversions)]
 #![deny(clippy::panic)]
 #![deny(clippy::unwrap_used)]
-//! A Matroska demuxer that can demux Matroska and WebM container files.
+//! A demuxer that can demux Matroska and WebM container files.
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -14,9 +14,10 @@ pub use enums::*;
 pub use error::DemuxError;
 
 use crate::ebml::{
-    collect_children, expect_master, find_string, find_unsigned, next_element, parse_ebml_header,
-    parse_element_header, try_find_date, try_find_float, try_find_string, try_find_unsigned,
-    ElementData,
+    collect_children, expect_master, find_bool_or, find_custom_type, find_nonzero, find_nonzero_or,
+    find_string, find_unsigned, next_element, parse_ebml_header, parse_element_header,
+    try_find_binary, try_find_date, try_find_float, try_find_nonzero, try_find_string,
+    try_find_unsigned, ElementData,
 };
 use crate::element_id::{ElementId, ID_TO_ELEMENT_ID};
 
@@ -126,16 +127,18 @@ pub struct Info {
 
 impl Info {
     pub(crate) fn new(fields: &[(ElementId, ElementData)]) -> Result<Info> {
-        let timestamp_scale = try_find_unsigned(fields, ElementId::TimestampScale)?;
+        let timestamp_scale = find_nonzero_or(fields, ElementId::TimestampScale, 1000000)?;
         let duration = try_find_float(fields, ElementId::Duration)?;
         let date_utc = try_find_date(fields, ElementId::DateUtc)?;
         let title = try_find_string(fields, ElementId::Title)?;
         let muxing_app = find_string(fields, ElementId::MuxingApp)?;
         let writing_app = find_string(fields, ElementId::WritingApp)?;
 
-        let timestamp_scale = timestamp_scale.unwrap_or(1000000);
-        let timestamp_scale = NonZeroU64::new(timestamp_scale)
-            .ok_or(DemuxError::NonZeroValueIsZero(ElementId::TimestampScale))?;
+        if let Some(duration) = duration {
+            if duration < 0.0 {
+                return Err(DemuxError::PositiveValueIsNotPositive);
+            }
+        }
 
         Ok(Self {
             timestamp_scale,
@@ -148,41 +151,298 @@ impl Info {
     }
 
     /// Timestamp scale in nanoseconds (1_000_000 means all timestamps in the Segment are expressed in milliseconds).
-    pub fn timestamp_scale(&self) -> &NonZeroU64 {
-        &self.timestamp_scale
+    pub fn timestamp_scale(&self) -> NonZeroU64 {
+        self.timestamp_scale
     }
 
     /// Duration of the Segment in nanoseconds based on TimestampScale.
-    pub fn duration(&self) -> &Option<f64> {
-        &self.duration
+    pub fn duration(&self) -> Option<f64> {
+        self.duration
     }
 
     /// The date and time that the Segment was created by the muxing application or library.
-    pub fn date_utc(&self) -> &Option<i64> {
-        &self.date_utc
+    pub fn date_utc(&self) -> Option<i64> {
+        self.date_utc
     }
 
     /// General name of the Segment.
-    pub fn title(&self) -> &Option<String> {
-        &self.title
+    pub fn title(&self) -> Option<&str> {
+        match &self.title {
+            None => None,
+            Some(title) => Some(title),
+        }
     }
 
     /// Muxing application or library.
-    pub fn muxing_app(&self) -> &String {
+    pub fn muxing_app(&self) -> &str {
         &self.muxing_app
     }
 
     /// Writing  application.
-    pub fn writing_app(&self) -> &String {
+    pub fn writing_app(&self) -> &str {
         &self.writing_app
     }
 }
 
-// Track
-// - Video
-// - Audio
-// - Colour
-// - ContentEncoding
+/// The TrackEntry element.
+#[derive(Clone, Debug)]
+pub struct TrackEntry {
+    track_number: NonZeroU64,
+    track_uid: NonZeroU64,
+    track_type: TrackType,
+    flag_enabled: bool,
+    flag_default: bool,
+    flag_forced: bool,
+    flag_lacing: bool,
+    default_duration: Option<NonZeroU64>,
+    name: Option<String>,
+    language: Option<String>,
+    codec_id: String,
+    codec_private: Option<Vec<u8>>,
+    codec_name: Option<String>,
+    codec_delay: Option<u64>,
+    seek_pre_roll: Option<u64>,
+    video: Option<Video>,
+    audio: Option<Audio>,
+    content_encodings: Option<Vec<ContentEncoding>>,
+}
+
+impl TrackEntry {
+    pub(crate) fn new<R: Seek + Read>(
+        r: &mut R,
+        fields: &[(ElementId, ElementData)],
+    ) -> Result<TrackEntry> {
+        let track_number = find_nonzero(fields, ElementId::TrackNumber)?;
+        let track_uid = find_nonzero(fields, ElementId::TrackUid)?;
+        let track_type = find_custom_type(fields, ElementId::TrackType)?;
+        let flag_enabled = find_bool_or(fields, ElementId::FlagEnabled, true)?;
+        let flag_default = find_bool_or(fields, ElementId::FlagDefault, true)?;
+        let flag_forced = find_bool_or(fields, ElementId::FlagForced, false)?;
+        let flag_lacing = find_bool_or(fields, ElementId::FlagLacing, false)?;
+        let default_duration = try_find_nonzero(fields, ElementId::DefaultDuration)?;
+        let name = try_find_string(fields, ElementId::Name)?;
+        let language = try_find_string(fields, ElementId::Language)?;
+        let codec_id = find_string(fields, ElementId::CodecId)?;
+        let codec_private = try_find_binary(r, fields, ElementId::CodecPrivate)?;
+        let codec_name = try_find_string(fields, ElementId::CodecName)?;
+        let codec_delay = try_find_unsigned(fields, ElementId::CodecDelay)?;
+        let seek_pre_roll = try_find_unsigned(fields, ElementId::SeekPreRoll)?;
+
+        // TODO parse AUDIO
+        // TODO parse VIDEO
+        // TODO parse ContentEncoding
+
+        Ok(Self {
+            track_number,
+            track_uid,
+            track_type,
+            flag_enabled,
+            flag_default,
+            flag_forced,
+            flag_lacing,
+            default_duration,
+            name,
+            language,
+            codec_id,
+            codec_private,
+            codec_name,
+            codec_delay,
+            seek_pre_roll,
+            video: None,
+            audio: None,
+            content_encodings: None,
+        })
+    }
+
+    /// The track number as used in the Block Header.
+    pub fn track_number(&self) -> NonZeroU64 {
+        self.track_number
+    }
+
+    /// A unique ID to identify the Track.
+    pub fn track_uid(&self) -> NonZeroU64 {
+        self.track_uid
+    }
+
+    /// The type of the track.
+    pub fn track_type(&self) -> TrackType {
+        self.track_type
+    }
+
+    /// Indicates if a track is usable. It is possible to turn a not usable track
+    /// into a usable track using chapter codecs or control tracks.
+    pub fn flag_enabled(&self) -> bool {
+        self.flag_enabled
+    }
+
+    /// Set if that track (audio, video or subs) should be eligible
+    /// for automatic selection by the player.
+    pub fn flag_default(&self) -> bool {
+        self.flag_default
+    }
+
+    /// Applies only to subtitles. Set if that track should be eligible for automatic selection
+    /// by the player if it matches the user's language preference, even if the user's preferences
+    /// would normally not enable subtitles with the selected audio track.
+    pub fn flag_forced(&self) -> bool {
+        self.flag_forced
+    }
+
+    /// Indicates if the track may contain blocks using lacing.
+    pub fn flag_lacing(&self) -> bool {
+        self.flag_lacing
+    }
+
+    /// Number of nanoseconds (not scaled via TimestampScale) per frame (one Element put into a (Simple)Block).
+    pub fn default_duration(&self) -> Option<NonZeroU64> {
+        self.default_duration
+    }
+
+    /// A human-readable track name.
+    pub fn name(&self) -> Option<&str> {
+        match &self.name {
+            None => None,
+            Some(name) => Some(name),
+        }
+    }
+
+    /// Specifies the language of the track.
+    pub fn language(&self) -> Option<&str> {
+        match &self.language {
+            None => None,
+            Some(language) => Some(language),
+        }
+    }
+
+    /// An ID corresponding to the codec.
+    pub fn codec_id(&self) -> &str {
+        &self.codec_id
+    }
+
+    /// Private data only known to the codec.
+    pub fn codec_private(&self) -> Option<&[u8]> {
+        match &self.codec_private {
+            None => None,
+            Some(data) => Some(data),
+        }
+    }
+
+    /// A human-readable string specifying the codec.
+    pub fn codec_name(&self) -> Option<&str> {
+        match &self.codec_name {
+            None => None,
+            Some(codec_name) => Some(codec_name),
+        }
+    }
+
+    /// CodecDelay is ehe codec-built-in delay in nanoseconds.
+    /// This value must be subtracted from each block timestamp in order to get the actual timestamp.
+    pub fn codec_delay(&self) -> Option<u64> {
+        self.codec_delay
+    }
+
+    /// After a discontinuity, SeekPreRoll is the duration in nanoseconds of the data the decoder
+    /// must decode before the decoded data is valid.
+    pub fn seek_pre_roll(&self) -> Option<u64> {
+        self.seek_pre_roll
+    }
+
+    /// Video settings.
+    pub fn video(&self) -> Option<&Video> {
+        self.video.as_ref()
+    }
+
+    /// Audio settings.
+    pub fn audio(&self) -> Option<&Audio> {
+        self.audio.as_ref()
+    }
+
+    /// Audio settings.
+    pub fn content_encodings(&self) -> Option<&[ContentEncoding]> {
+        match &self.content_encodings {
+            None => None,
+            Some(content_encodings) => Some(content_encodings),
+        }
+    }
+}
+
+/// The Audio element.
+#[derive(Clone, Debug)]
+pub struct Audio {
+    // Default 8000.0, bigger than 0.0
+    sampling_frequency: f64,
+    // bigger than 0.0
+    output_sampling_frequency: Option<f64>,
+    // Default 1
+    channels: NonZeroU64,
+    bit_depth: NonZeroU64,
+}
+
+/// The Video element.
+#[derive(Clone, Debug)]
+pub struct Video {
+    // FlagInterlaced
+    // StereoMode
+    // AlphaMode
+    // PixelWidth
+    // PixelHeight
+    // PixelCropBottom
+    // PixelCropTop
+    // PixelCropLeft
+    // PixelCropRight
+    // DisplayWidth
+    // DisplayHeight
+    // DisplayUnit
+    // AspectRatioType
+    color: Option<Colour>,
+}
+
+/// The Colour element.
+#[derive(Clone, Debug)]
+pub struct Colour {
+    // MatrixCoefficients
+// BitsPerChannel
+// ChromaSubsamplingHorz
+// ChromaSubsamplingVert
+// CbSubsamplingHorz
+// CbSubsamplingVert
+// ChromaSitingHorz
+// ChromaSitingVert
+// Range
+// TransferCharacteristics
+// Primaries
+// MaxCLL
+// MaxFALL
+// Vec<MasteringMetadata>
+}
+
+/// The MasteringMetadata element.
+#[derive(Clone, Debug)]
+pub struct MasteringMetadata {
+    // PrimaryRChromaticityX
+// PrimaryRChromaticityY
+// PrimaryGChromaticityX
+// PrimaryGChromaticityY
+// PrimaryBChromaticityX
+// PrimaryBChromaticityY
+// WhitePointChromaticityX
+// WhitePointChromaticityY
+// LuminanceMax
+// LuminanceMin
+}
+
+/// The ContentEncoding element.
+#[derive(Clone, Debug)]
+pub struct ContentEncoding {
+    // ContentEncodingOrder
+// ContentEncodingScope
+// ContentEncodingType
+// ContentEncryption
+// ContentEncAlgo
+// ContentEncKeyID
+// ContentEncAESSettings
+// AESSettingsCipherMode
+}
 
 /// Demuxer for Matroska files.
 #[derive(Clone, Debug)]
@@ -191,6 +451,7 @@ pub struct MatroskaFile<R> {
     ebml_header: EbmlHeader,
     seek_head: HashMap<ElementId, u64>,
     info: Info,
+    tracks: Vec<TrackEntry>,
 }
 
 impl<R: Read + Seek> MatroskaFile<R> {
@@ -228,13 +489,11 @@ impl<R: Read + Seek> MatroskaFile<R> {
         }
 
         let info = parse_segment_info(&mut file, &mut seek_head)?;
+        let tracks = parse_tracks(&mut file, &mut seek_head)?;
 
-        // TODO parse the Tracks element
         // TODO parse Cues element
-
         // TODO how to parse blocks and how to do seeking?
         // TODO we could add a BTreeMap and store the Cues in it. If no Cues have been found, we could (re-)build them too, if asked for (open(file: &mut File, build_cues: Bool)
-
         // TODO lazy loading: Chapters, Tagging
 
         Ok(Self {
@@ -242,6 +501,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
             ebml_header,
             seek_head,
             info,
+            tracks,
         })
     }
 
@@ -253,6 +513,11 @@ impl<R: Read + Seek> MatroskaFile<R> {
     /// Returns the segment info.
     pub fn info(&self) -> &Info {
         &self.info
+    }
+
+    /// Returns the tracks of the file.
+    pub fn tracks(&self) -> &[TrackEntry] {
+        &self.tracks
     }
 }
 
@@ -364,15 +629,37 @@ fn find_first_cluster_offset<R: Read + Seek>(
 }
 
 fn parse_segment_info<R: Read + Seek>(
-    mut file: &mut R,
+    r: &mut R,
     seek_head: &mut HashMap<ElementId, u64>,
 ) -> Result<Info> {
-    if let Some(info_offset) = seek_head.get(&ElementId::Info) {
-        let (info_data_offset, info_data_size) =
-            expect_master(&mut file, ElementId::Info, Some(*info_offset))?;
-        let children = collect_children(&mut file, info_data_offset, info_data_size)?;
+    if let Some(offset) = seek_head.get(&ElementId::Info) {
+        let (info_data_offset, info_data_size) = expect_master(r, ElementId::Info, Some(*offset))?;
+        let children = collect_children(r, info_data_offset, info_data_size)?;
         let info = Info::new(&children)?;
         Ok(info)
+    } else {
+        Err(DemuxError::ElementNotFound(ElementId::Info))
+    }
+}
+
+fn parse_tracks<R: Read + Seek>(
+    r: &mut R,
+    seek_head: &mut HashMap<ElementId, u64>,
+) -> Result<Vec<TrackEntry>> {
+    let mut tracks = vec![];
+    if let Some(offset) = seek_head.get(&ElementId::Tracks) {
+        let (data_offset, data_size) = expect_master(r, ElementId::Tracks, Some(*offset))?;
+        let children = collect_children(r, data_offset, data_size)?;
+        for (element_id, element_data) in children {
+            if let ElementId::TrackEntry = element_id {
+                if let ElementData::Location { offset, size } = element_data {
+                    let children = collect_children(r, offset, size)?;
+                    let track_entry = TrackEntry::new(r, &children)?;
+                    tracks.push(track_entry)
+                }
+            }
+        }
+        Ok(tracks)
     } else {
         Err(DemuxError::ElementNotFound(ElementId::Info))
     }

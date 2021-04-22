@@ -6,7 +6,7 @@
 ![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Apache](https://img.shields.io/badge/license-Apache-blue.svg)
 
-A Matroska demuxer that can demux Matroska and WebM container files.
+A demuxer that can demux Matroska and WebM container files.
 
 For simplicity only the elements supported by both Matroska and WebM are supported.
 

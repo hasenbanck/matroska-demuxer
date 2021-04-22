@@ -1,7 +1,8 @@
 //! Implement the parsing of EBML coded files.
 
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::io::{Read, Seek, SeekFrom};
+use std::num::NonZeroU64;
 
 use crate::element_id::{ElementId, ElementType, ELEMENT_ID_TO_TYPE, ID_TO_ELEMENT_ID};
 use crate::{DemuxError, EbmlHeader, Result};
@@ -118,21 +119,80 @@ pub(crate) fn find_unsigned(
     Ok(value)
 }
 
+/// Expects to find element with the an Element ID for an unsigned integer inside a list of children and converts it into a custom type.
+pub(crate) fn find_custom_type<T: From<u64>>(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<T> {
+    let value =
+        try_find_unsigned(fields, element_id)?.ok_or(DemuxError::ElementNotFound(element_id))?;
+    Ok(value.into())
+}
+
+/// Tries to find an element with the Element ID for a boolean inside a list of children, otherwise sets the default value.
+pub(crate) fn find_bool_or(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+    default: bool,
+) -> Result<bool> {
+    let value = try_find_unsigned(fields, element_id)?;
+    match value {
+        None => Ok(default),
+        Some(value) => match value {
+            0 => Ok(false),
+            _ => Ok(true),
+        },
+    }
+}
+
+/// Expects to find an element with the Element ID for a non zero unsigned integer inside a list of children.
+pub(crate) fn find_nonzero(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<NonZeroU64> {
+    let value =
+        try_find_unsigned(fields, element_id)?.ok_or(DemuxError::ElementNotFound(element_id))?;
+    NonZeroU64::new(value).ok_or(DemuxError::NonZeroValueIsZero(element_id))
+}
+
+/// Tries to find an element with the Element ID for an non zero unsigned integer inside a list of children.
+pub(crate) fn try_find_nonzero(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<NonZeroU64>> {
+    match try_find_unsigned(fields, element_id)? {
+        None => Ok(None),
+        Some(value) => Ok(Some(
+            NonZeroU64::new(value).ok_or(DemuxError::NonZeroValueIsZero(element_id))?,
+        )),
+    }
+}
+
+/// Tries to find an element with the Element ID for an non zero unsigned integer inside a list of children, otherwise sets the default value.
+pub(crate) fn find_nonzero_or(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+    default: u64,
+) -> Result<NonZeroU64> {
+    let value = try_find_unsigned(fields, element_id)?;
+    let value = value.unwrap_or(default);
+    NonZeroU64::new(value).ok_or(DemuxError::NonZeroValueIsZero(element_id))
+}
+
 /// Tries to find an element with the Element ID for an unsigned integer inside a list of children.
 pub(crate) fn try_find_unsigned(
     fields: &[(ElementId, ElementData)],
     element_id: ElementId,
 ) -> Result<Option<u64>> {
-    let value = if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+    if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
         if let ElementData::Unsigned(value) = data {
-            *value
+            Ok(Some(*value))
         } else {
-            return Err(DemuxError::UnexpectedDataType);
+            Err(DemuxError::UnexpectedDataType)
         }
     } else {
-        return Ok(None);
-    };
-    Ok(Some(value))
+        Ok(None)
+    }
 }
 
 /// Tries to find an element with the Element ID for a float inside a list of children.
@@ -140,16 +200,15 @@ pub(crate) fn try_find_float(
     fields: &[(ElementId, ElementData)],
     element_id: ElementId,
 ) -> Result<Option<f64>> {
-    let value = if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+    if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
         if let ElementData::Float(value) = data {
-            *value
+            Ok(Some(*value))
         } else {
-            return Err(DemuxError::UnexpectedDataType);
+            Err(DemuxError::UnexpectedDataType)
         }
     } else {
-        return Ok(None);
-    };
-    Ok(Some(value))
+        Ok(None)
+    }
 }
 
 /// Expects to find an element with the Element ID for a string inside a list of children.
@@ -167,16 +226,35 @@ pub(crate) fn try_find_string(
     fields: &[(ElementId, ElementData)],
     element_id: ElementId,
 ) -> Result<Option<String>> {
-    let value = if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+    if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
         if let ElementData::String(value) = data {
-            value.clone()
+            Ok(Some(value.clone()))
         } else {
-            return Err(DemuxError::UnexpectedDataType);
+            Err(DemuxError::UnexpectedDataType)
         }
     } else {
-        return Ok(None);
-    };
-    Ok(Some(value))
+        Ok(None)
+    }
+}
+
+/// Tries to find an element with the Element ID for binary inside a list of children.
+pub(crate) fn try_find_binary<R: Read + Seek>(
+    r: &mut R,
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<Vec<u8>>> {
+    if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+        if let ElementData::Location { offset: _, size } = data {
+            let size = usize::try_from(*size)?;
+            let mut data = vec![0_u8; size];
+            let _ = r.read_exact(&mut data)?;
+            Ok(Some(data))
+        } else {
+            Err(DemuxError::UnexpectedDataType)
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 /// Tries to find an element with the Element ID for a date inside a list of children.
@@ -184,16 +262,15 @@ pub(crate) fn try_find_date(
     fields: &[(ElementId, ElementData)],
     element_id: ElementId,
 ) -> Result<Option<i64>> {
-    let value = if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+    if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
         if let ElementData::Date(value) = data {
-            *value
+            Ok(Some(*value))
         } else {
-            return Err(DemuxError::UnexpectedDataType);
+            Err(DemuxError::UnexpectedDataType)
         }
     } else {
-        return Ok(None);
-    };
-    Ok(Some(value))
+        Ok(None)
+    }
 }
 
 /// Parses the next Element at the current location of the reader and returns it's data.
