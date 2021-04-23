@@ -133,6 +133,21 @@ where
     Ok(children)
 }
 
+/// Expects to find the child with the given Element ID from the given fields and reader.
+pub(crate) fn parse_child<R, T>(
+    r: &mut R,
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<T::Output>
+where
+    R: Read + Seek,
+    T: ParsableElement<R>,
+{
+    let child = try_parse_child::<_, T>(r, fields, element_id)?
+        .ok_or(DemuxError::ElementNotFound(element_id))?;
+    Ok(child)
+}
+
 /// Tries to parse the child with the given Element ID from the given fields and reader.
 pub(crate) fn try_parse_child<R, T>(
     r: &mut R,

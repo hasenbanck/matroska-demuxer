@@ -29,6 +29,8 @@ use element_id::ID_TO_ELEMENT_ID;
 pub use enums::*;
 pub use error::DemuxError;
 
+use crate::ebml::parse_child;
+
 mod ebml;
 pub(crate) mod element_id;
 mod enums;
@@ -137,25 +139,6 @@ impl EbmlHeader {
     /// The minimum DocType version an interpreter has to support to read this file.
     pub fn doc_type_read_version(&self) -> u64 {
         self.doc_type_read_version
-    }
-}
-
-/// An entry in the seek head.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct SeekEntry {
-    id: ElementId,
-    offset: u64,
-}
-
-impl<R: Read + Seek> ParsableElement<R> for SeekEntry {
-    type Output = Self;
-
-    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
-        let id: u32 = find_unsigned(fields, ElementId::SeekId)?.try_into()?;
-        let id = *ID_TO_ELEMENT_ID.get(&id).unwrap_or(&ElementId::Unknown);
-        let offset = find_unsigned(fields, ElementId::SeekPosition)?;
-
-        Ok(Self { id, offset })
     }
 }
 
@@ -988,9 +971,28 @@ impl ContentEncAesSettings {
     }
 }
 
+/// An entry in the seek head.
+#[derive(Clone, Copy, Debug)]
+struct SeekEntry {
+    id: ElementId,
+    offset: u64,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for SeekEntry {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let id: u32 = find_unsigned(fields, ElementId::SeekId)?.try_into()?;
+        let id = *ID_TO_ELEMENT_ID.get(&id).unwrap_or(&ElementId::Unknown);
+        let offset = find_unsigned(fields, ElementId::SeekPosition)?;
+
+        Ok(Self { id, offset })
+    }
+}
+
 /// Contains all information relative to a seek point in the segment.
 #[derive(Clone, Debug)]
-pub struct CuePoint {
+struct CuePoint {
     time: u64,
     track_position: CueTrackPositions,
 }
@@ -998,26 +1000,45 @@ pub struct CuePoint {
 impl<R: Read + Seek> ParsableElement<R> for CuePoint {
     type Output = Self;
 
-    fn new(_r: &mut R, _fields: &[(ElementId, ElementData)]) -> Result<Self> {
-        unimplemented!()
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let time = find_unsigned(fields, ElementId::CueTime)?;
+        let track_position =
+            parse_child::<_, CueTrackPositions>(r, fields, ElementId::CueTrackPositions)?;
+
+        Ok(Self {
+            time,
+            track_position,
+        })
     }
 }
 
 /// Contain positions for different tracks corresponding to the timestamp.
 #[derive(Clone, Debug)]
-pub struct CueTrackPositions {
+struct CueTrackPositions {
     track: u64,
     cluster_position: u64,
     relative_position: Option<u64>,
-    cue_duration: Option<u64>,
-    cue_block_number: Option<u64>,
+    duration: Option<u64>,
+    block_number: Option<u64>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for CueTrackPositions {
     type Output = Self;
 
-    fn new(_r: &mut R, _fields: &[(ElementId, ElementData)]) -> Result<Self> {
-        unimplemented!()
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let track = find_unsigned(fields, ElementId::CueTrack)?;
+        let cluster_position = find_unsigned(fields, ElementId::CueClusterPosition)?;
+        let relative_position = try_find_unsigned(fields, ElementId::CueRelativePosition)?;
+        let duration = try_find_unsigned(fields, ElementId::CueDuration)?;
+        let block_number = try_find_unsigned(fields, ElementId::CueBlockNumber)?;
+
+        Ok(Self {
+            track,
+            cluster_position,
+            relative_position,
+            duration,
+            block_number,
+        })
     }
 }
 
