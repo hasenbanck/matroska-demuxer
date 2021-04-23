@@ -10,17 +10,17 @@ use std::convert::TryInto;
 use std::io::{Read, Seek, SeekFrom};
 use std::num::NonZeroU64;
 
+use ebml::{
+    collect_children, expect_master, find_bool_or, find_custom_type, find_float_or, find_nonzero,
+    find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element,
+    parse_children_at_offset, parse_element_header, try_find_binary, try_find_custom_type,
+    try_find_custom_type_or, try_find_date, try_find_float, try_find_nonzero, try_find_string,
+    try_find_unsigned, try_parse_child, try_parse_children, ElementData, ParsableElement,
+};
+pub use element_id::ElementId;
+use element_id::ID_TO_ELEMENT_ID;
 pub use enums::*;
 pub use error::DemuxError;
-
-use crate::ebml::{
-    collect_children, expect_master, find_bool_or, find_custom_type, find_float_or, find_nonzero,
-    find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element, parse_children,
-    parse_children_for_master, parse_element_header, try_find_binary, try_find_custom_type,
-    try_find_custom_type_or, try_find_date, try_find_float, try_find_nonzero, try_find_string,
-    try_find_unsigned, try_parse_child, ElementData, ParsableElement,
-};
-use crate::element_id::{ElementId, ID_TO_ELEMENT_ID};
 
 mod ebml;
 pub(crate) mod element_id;
@@ -272,7 +272,12 @@ impl<R: Read + Seek> ParsableElement<R> for TrackEntry {
         let audio = try_parse_child::<_, Audio>(r, fields, ElementId::Audio)?;
         let video = try_parse_child::<_, Video>(r, fields, ElementId::Video)?;
 
-        let content_encodings = parse_content_encodings(r, fields)?;
+        let content_encodings = try_parse_children::<_, ContentEncoding>(
+            r,
+            fields,
+            ElementId::ContentEncodings,
+            ElementId::ContentEncoding,
+        )?;
 
         Ok(Self {
             track_number,
@@ -411,7 +416,7 @@ impl TrackEntry {
 }
 
 /// Audio settings.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Audio {
     sampling_frequency: f64,
     output_sampling_frequency: Option<f64>,
@@ -470,79 +475,368 @@ impl Audio {
 }
 
 /// Video settings.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Video {
-    // FlagInterlaced
-    // StereoMode
-    // AlphaMode
-    // PixelWidth
-    // PixelHeight
-    // PixelCropBottom
-    // PixelCropTop
-    // PixelCropLeft
-    // PixelCropRight
-    // DisplayWidth
-    // DisplayHeight
-    // DisplayUnit
-    // AspectRatioType
-    color: Option<Colour>,
+    flag_interlaced: FlagInterlaced,
+    stereo_mode: Option<StereoMode>,
+    alpha_mode: Option<u64>,
+    pixel_width: NonZeroU64,
+    pixel_height: NonZeroU64,
+    pixel_crop_bottom: Option<u64>,
+    pixel_crop_top: Option<u64>,
+    pixel_crop_left: Option<u64>,
+    pixel_crop_right: Option<u64>,
+    display_width: Option<NonZeroU64>,
+    display_height: Option<NonZeroU64>,
+    display_unit: Option<DisplayUnit>,
+    aspect_ratio_type: Option<AspectRatioType>,
+    colour: Option<Colour>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for Video {
     type Output = Self;
 
-    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
-        Ok(Self { color: None })
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let flag_interlaced =
+            try_find_custom_type_or(fields, ElementId::FlagInterlaced, FlagInterlaced::Unknown)?;
+        let stereo_mode = try_find_custom_type(fields, ElementId::StereoMode)?;
+        let alpha_mode = try_find_unsigned(fields, ElementId::AlphaMode)?;
+        let pixel_width = find_nonzero(fields, ElementId::PixelWidth)?;
+        let pixel_height = find_nonzero(fields, ElementId::PixelHeight)?;
+        let pixel_crop_bottom = try_find_unsigned(fields, ElementId::PixelCropBottom)?;
+        let pixel_crop_top = try_find_unsigned(fields, ElementId::PixelCropTop)?;
+        let pixel_crop_left = try_find_unsigned(fields, ElementId::PixelCropLeft)?;
+        let pixel_crop_right = try_find_unsigned(fields, ElementId::PixelCropRight)?;
+        let display_width = try_find_nonzero(fields, ElementId::DisplayWidth)?;
+        let display_height = try_find_nonzero(fields, ElementId::DisplayHeight)?;
+        let display_unit = try_find_custom_type(fields, ElementId::DisplayUnit)?;
+        let aspect_ratio_type = try_find_custom_type(fields, ElementId::AspectRatioType)?;
+        let colour = try_parse_child::<_, Colour>(r, fields, ElementId::Colour)?;
+
+        Ok(Self {
+            flag_interlaced,
+            stereo_mode,
+            alpha_mode,
+            pixel_width,
+            pixel_height,
+            pixel_crop_bottom,
+            pixel_crop_top,
+            pixel_crop_left,
+            pixel_crop_right,
+            display_width,
+            display_height,
+            display_unit,
+            aspect_ratio_type,
+            colour,
+        })
+    }
+}
+
+impl Video {
+    /// A flag to declare if the video is known to be progressive, or interlaced,
+    /// and if applicable to declare details about the interlacement.
+    pub fn flag_interlaced(&self) -> FlagInterlaced {
+        self.flag_interlaced
+    }
+
+    /// Stereo-3D video mode.
+    pub fn stereo_mode(&self) -> Option<StereoMode> {
+        self.stereo_mode
+    }
+
+    /// Alpha Video Mode. Presence of this Element indicates that the
+    /// BlockAdditional Element could contain Alpha data.
+    pub fn alpha_mode(&self) -> Option<u64> {
+        self.alpha_mode
+    }
+
+    /// Width of the encoded video frames in pixels.
+    pub fn pixel_width(&self) -> NonZeroU64 {
+        self.pixel_width
+    }
+
+    /// Height of the encoded video frames in pixels.
+    pub fn pixel_height(&self) -> NonZeroU64 {
+        self.pixel_height
+    }
+
+    /// The number of video pixels to remove at the bottom of the image.
+    pub fn pixel_crop_bottom(&self) -> Option<u64> {
+        self.pixel_crop_bottom
+    }
+
+    /// The number of video pixels to remove at the top of the image.
+    pub fn pixel_crop_top(&self) -> Option<u64> {
+        self.pixel_crop_top
+    }
+
+    /// The number of video pixels to remove on the left of the image.
+    pub fn pixel_crop_left(&self) -> Option<u64> {
+        self.pixel_crop_left
+    }
+
+    ///  	The number of video pixels to remove on the right of the image.
+    pub fn pixel_crop_right(&self) -> Option<u64> {
+        self.pixel_crop_right
+    }
+
+    /// Width of the video frames to display.
+    /// Applies to the video frame after cropping (PixelCrop* Elements).
+    pub fn display_width(&self) -> Option<NonZeroU64> {
+        self.display_width
+    }
+
+    /// Height of the video frames to display.
+    /// Applies to the video frame after cropping (PixelCrop* Elements).
+    pub fn display_height(&self) -> Option<NonZeroU64> {
+        self.display_height
+    }
+
+    /// How DisplayWidth & DisplayHeight are interpreted.
+    pub fn display_unit(&self) -> Option<DisplayUnit> {
+        self.display_unit
+    }
+
+    /// Specify the possible modifications to the aspect ratio.
+    pub fn aspect_ratio_type(&self) -> Option<AspectRatioType> {
+        self.aspect_ratio_type
+    }
+
+    /// Settings describing the colour format.
+    pub fn colour(&self) -> Option<&Colour> {
+        self.colour.as_ref()
     }
 }
 
 /// Settings describing the colour format.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Colour {
-    // MatrixCoefficients
-// BitsPerChannel
-// ChromaSubsamplingHorz
-// ChromaSubsamplingVert
-// CbSubsamplingHorz
-// CbSubsamplingVert
-// ChromaSitingHorz
-// ChromaSitingVert
-// Range
-// TransferCharacteristics
-// Primaries
-// MaxCLL
-// MaxFALL
-// Vec<MasteringMetadata>
+    matrix_coefficients: Option<MatrixCoefficients>,
+    bits_per_channel: Option<u64>,
+    chroma_subsampling_horz: Option<u64>,
+    chroma_subsampling_vert: Option<u64>,
+    cb_subsampling_horz: Option<u64>,
+    cb_subsampling_vert: Option<u64>,
+    chroma_sitting_horz: Option<ChromaSitingHorz>,
+    chroma_sitting_vert: Option<ChromaSitingVert>,
+    range: Option<Range>,
+    transfer_characteristics: Option<TransferCharacteristics>,
+    primaries: Option<Primaries>,
+    max_cll: Option<u64>,
+    max_fall: Option<u64>,
+    mastering_metadata: Option<MasteringMetadata>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for Colour {
     type Output = Self;
 
-    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
-        Ok(Self {})
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let matrix_coefficients = try_find_custom_type(fields, ElementId::MatrixCoefficients)?;
+        let bits_per_channel = try_find_unsigned(fields, ElementId::BitsPerChannel)?;
+        let chroma_subsampling_horz = try_find_unsigned(fields, ElementId::ChromaSubsamplingHorz)?;
+        let chroma_subsampling_vert = try_find_unsigned(fields, ElementId::ChromaSubsamplingVert)?;
+        let cb_subsampling_horz = try_find_unsigned(fields, ElementId::CbSubsamplingHorz)?;
+        let cb_subsampling_vert = try_find_unsigned(fields, ElementId::CbSubsamplingVert)?;
+        let chroma_sitting_horz = try_find_custom_type(fields, ElementId::ChromaSitingHorz)?;
+        let chroma_sitting_vert = try_find_custom_type(fields, ElementId::ChromaSitingVert)?;
+        let range = try_find_custom_type(fields, ElementId::Range)?;
+        let transfer_characteristics =
+            try_find_custom_type(fields, ElementId::TransferCharacteristics)?;
+        let primaries = try_find_custom_type(fields, ElementId::Primaries)?;
+        let max_cll = try_find_unsigned(fields, ElementId::MatrixCoefficients)?;
+        let max_fall = try_find_unsigned(fields, ElementId::MatrixCoefficients)?;
+        let mastering_metadata =
+            try_parse_child::<_, MasteringMetadata>(r, fields, ElementId::MasteringMetadata)?;
+
+        Ok(Self {
+            matrix_coefficients,
+            bits_per_channel,
+            chroma_subsampling_horz,
+            chroma_subsampling_vert,
+            cb_subsampling_horz,
+            cb_subsampling_vert,
+            chroma_sitting_horz,
+            chroma_sitting_vert,
+            range,
+            transfer_characteristics,
+            primaries,
+            max_cll,
+            max_fall,
+            mastering_metadata,
+        })
+    }
+}
+
+impl Colour {
+    /// The Matrix Coefficients of the video used to derive luma and chroma values
+    /// from red, green, and blue color primaries.
+    pub fn matrix_coefficients(&self) -> Option<MatrixCoefficients> {
+        self.matrix_coefficients
+    }
+    /// Number of decoded bits per channel.
+    pub fn bits_per_channel(&self) -> Option<u64> {
+        self.bits_per_channel
+    }
+
+    /// The amount of pixels to remove in the Cr and Cb channels
+    /// for every pixel not removed horizontally.
+    pub fn chroma_subsampling_horz(&self) -> Option<u64> {
+        self.chroma_subsampling_horz
+    }
+
+    /// The amount of pixels to remove in the Cr and Cb channels
+    /// for every pixel not removed vertically.
+    pub fn chroma_subsampling_vert(&self) -> Option<u64> {
+        self.chroma_subsampling_vert
+    }
+
+    /// The amount of pixels to remove in the Cb channel for every pixel not removed horizontally
+    pub fn cb_subsampling_horz(&self) -> Option<u64> {
+        self.cb_subsampling_horz
+    }
+
+    /// The amount of pixels to remove in the Cb channel for every pixel not removed vertically.
+    pub fn cb_subsampling_vert(&self) -> Option<u64> {
+        self.cb_subsampling_vert
+    }
+
+    /// How chroma is sub sampled horizontally.
+    pub fn chroma_sitting_horz(&self) -> Option<ChromaSitingHorz> {
+        self.chroma_sitting_horz
+    }
+
+    /// How chroma is sub sampled vertically.
+    pub fn chroma_sitting_vert(&self) -> Option<ChromaSitingVert> {
+        self.chroma_sitting_vert
+    }
+
+    /// Clipping of the color ranges.
+    pub fn range(&self) -> Option<Range> {
+        self.range
+    }
+
+    /// The transfer characteristics of the video.
+    pub fn transfer_characteristics(&self) -> Option<TransferCharacteristics> {
+        self.transfer_characteristics
+    }
+
+    /// The colour primaries of the video.
+    pub fn primaries(&self) -> Option<Primaries> {
+        self.primaries
+    }
+
+    /// Maximum brightness of a single pixel (cd/m^2^).
+    pub fn max_cll(&self) -> Option<u64> {
+        self.max_cll
+    }
+
+    /// Maximum brightness of a single full frame (cd/m^2^).
+    pub fn max_fall(&self) -> Option<u64> {
+        self.max_fall
+    }
+
+    /// SMPTE 2086 mastering data.
+    pub fn mastering_metadata(&self) -> Option<&MasteringMetadata> {
+        self.mastering_metadata.as_ref()
     }
 }
 
 /// SMPTE 2086 mastering data.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct MasteringMetadata {
-    // PrimaryRChromaticityX
-// PrimaryRChromaticityY
-// PrimaryGChromaticityX
-// PrimaryGChromaticityY
-// PrimaryBChromaticityX
-// PrimaryBChromaticityY
-// WhitePointChromaticityX
-// WhitePointChromaticityY
-// LuminanceMax
-// LuminanceMin
+    primary_r_chromaticity_x: Option<f64>,
+    primary_r_chromaticity_y: Option<f64>,
+    primary_g_chromaticity_x: Option<f64>,
+    primary_g_chromaticity_y: Option<f64>,
+    primary_b_chromaticity_x: Option<f64>,
+    primary_b_chromaticity_y: Option<f64>,
+    white_point_chromaticity_x: Option<f64>,
+    white_point_chromaticity_y: Option<f64>,
+    luminance_max: Option<f64>,
+    luminance_min: Option<f64>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for MasteringMetadata {
     type Output = Self;
 
     fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
-        Ok(Self {})
+        let primary_r_chromaticity_x = try_find_float(fields, ElementId::PrimaryRChromaticityX)?;
+        let primary_r_chromaticity_y = try_find_float(fields, ElementId::PrimaryRChromaticityX)?;
+        let primary_g_chromaticity_x = try_find_float(fields, ElementId::PrimaryGChromaticityX)?;
+        let primary_g_chromaticity_y = try_find_float(fields, ElementId::PrimaryGChromaticityX)?;
+        let primary_b_chromaticity_x = try_find_float(fields, ElementId::PrimaryBChromaticityX)?;
+        let primary_b_chromaticity_y = try_find_float(fields, ElementId::PrimaryBChromaticityX)?;
+        let white_point_chromaticity_x =
+            try_find_float(fields, ElementId::WhitePointChromaticityX)?;
+        let white_point_chromaticity_y =
+            try_find_float(fields, ElementId::WhitePointChromaticityY)?;
+        let luminance_max = try_find_float(fields, ElementId::LuminanceMax)?;
+        let luminance_min = try_find_float(fields, ElementId::LuminanceMin)?;
+
+        Ok(Self {
+            primary_r_chromaticity_x,
+            primary_r_chromaticity_y,
+            primary_g_chromaticity_x,
+            primary_g_chromaticity_y,
+            primary_b_chromaticity_x,
+            primary_b_chromaticity_y,
+            white_point_chromaticity_x,
+            white_point_chromaticity_y,
+            luminance_max,
+            luminance_min,
+        })
+    }
+}
+
+impl MasteringMetadata {
+    /// Red X chromaticity coordinate, as defined by CIE 1931.
+    pub fn primary_r_chromaticity_x(&self) -> Option<f64> {
+        self.primary_r_chromaticity_x
+    }
+
+    /// Red Y chromaticity coordinate, as defined by CIE 1931.
+    pub fn primary_r_chromaticity_y(&self) -> Option<f64> {
+        self.primary_r_chromaticity_y
+    }
+
+    /// Green X chromaticity coordinate, as defined by CIE 1931.
+    pub fn primary_g_chromaticity_x(&self) -> Option<f64> {
+        self.primary_g_chromaticity_x
+    }
+
+    /// Green Y chromaticity coordinate, as defined by CIE 1931
+    pub fn primary_g_chromaticity_y(&self) -> Option<f64> {
+        self.primary_g_chromaticity_y
+    }
+
+    /// Blue X chromaticity coordinate, as defined by CIE 1931.
+    pub fn primary_b_chromaticity_x(&self) -> Option<f64> {
+        self.primary_g_chromaticity_x
+    }
+
+    /// Blue Y chromaticity coordinate, as defined by CIE 1931.
+    pub fn primary_b_chromaticity_y(&self) -> Option<f64> {
+        self.primary_g_chromaticity_y
+    }
+
+    /// White X chromaticity coordinate, as defined by CIE 1931.
+    pub fn white_point_chromaticity_x(&self) -> Option<f64> {
+        self.primary_g_chromaticity_x
+    }
+
+    /// White Y chromaticity coordinate, as defined by CIE 1931.
+    pub fn white_point_chromaticity_y(&self) -> Option<f64> {
+        self.primary_g_chromaticity_y
+    }
+
+    /// Maximum luminance. Represented in candelas per square meter (cd/m^2^).
+    pub fn luminance_max(&self) -> Option<f64> {
+        self.luminance_max
+    }
+
+    /// Minimum luminance. Represented in candelas per square meter (cd/m^2^).
+    pub fn luminance_min(&self) -> Option<f64> {
+        self.luminance_min
     }
 }
 
@@ -626,7 +920,11 @@ impl<R: Read + Seek> ParsableElement<R> for ContentEncryption {
             ContentEncAlgo::NotEncrypted,
         )?;
         let key_id = try_find_binary(r, fields, ElementId::ContentEncKeyId)?;
-        let aes_settings = parse_aes_settings(r, fields)?;
+        let aes_settings = try_parse_child::<_, ContentEncAesSettings>(
+            r,
+            fields,
+            ElementId::ContentEncAesSettings,
+        )?;
 
         Ok(Self {
             algo,
@@ -713,7 +1011,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
         let info = parse_segment_info(&mut file, &mut seek_head)?;
 
         let tracks = if let Some(offset) = seek_head.get(&ElementId::Tracks) {
-            parse_children_for_master::<_, TrackEntry>(
+            parse_children_at_offset::<_, TrackEntry>(
                 &mut file,
                 *offset,
                 ElementId::Tracks,
@@ -909,49 +1207,6 @@ fn parse_segment_info<R: Read + Seek>(
     } else {
         Err(DemuxError::ElementNotFound(ElementId::Info))
     }
-}
-
-fn parse_content_encodings<R: Read + Seek>(
-    r: &mut R,
-    fields: &[(ElementId, ElementData)],
-) -> Result<Option<Vec<ContentEncoding>>> {
-    let content_encodings = if let Some((_, ElementData::Location { offset, size })) = fields
-        .iter()
-        .find(|(id, _)| *id == ElementId::ContentEncodings)
-    {
-        let content_encodings =
-            parse_children::<_, ContentEncoding>(r, *offset, *size, ElementId::ContentEncoding)?;
-        Some(content_encodings)
-    } else {
-        None
-    };
-
-    Ok(content_encodings)
-}
-
-fn parse_aes_settings<R: Read + Seek>(
-    r: &mut R,
-    fields: &[(ElementId, ElementData)],
-) -> Result<Option<ContentEncAesSettings>> {
-    let aes_settings = if let Some((_, data)) = fields
-        .iter()
-        .find(|(id, data)| *id == ElementId::ContentEncAesSettings)
-    {
-        if let ElementData::Location { offset, size } = data {
-            let settings_fields = collect_children(r, *offset, *size)?;
-            try_parse_child::<_, ContentEncAesSettings>(
-                r,
-                &settings_fields,
-                ElementId::ContentEncAesSettings,
-            )?
-        } else {
-            return Err(DemuxError::UnexpectedDataType);
-        }
-    } else {
-        None
-    };
-
-    Ok(aes_settings)
 }
 
 #[cfg(test)]

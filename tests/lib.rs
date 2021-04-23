@@ -1,12 +1,50 @@
 use std::fs::File;
 use std::num::NonZeroU64;
 
-use matroska_demux::{ContentEncodingType, MatroskaFile, TrackEntry, TrackType};
+use matroska_demux::{
+    ContentEncodingType, MatrixCoefficients, MatroskaFile, Primaries, TrackEntry, TrackType,
+    TransferCharacteristics,
+};
 
 #[test]
 pub fn parse_simple_mkv() {
     let file = File::open("tests/data/simple.mkv").unwrap();
     let _mkv = MatroskaFile::open(file).unwrap();
+}
+
+#[test]
+pub fn parse_hdr_mkv() {
+    let file = File::open("tests/data/hdr.mkv").unwrap();
+    let mkv = MatroskaFile::open(file).unwrap();
+
+    let video_tracks: Vec<TrackEntry> = mkv
+        .tracks()
+        .iter()
+        .filter(|t| t.track_type() == TrackType::Video)
+        .cloned()
+        .collect();
+
+    let video = video_tracks[0].video().unwrap();
+
+    assert_eq!(video.pixel_width().get(), 3840);
+    assert_eq!(video.pixel_height().get(), 2160);
+
+    let colour = video.colour().unwrap();
+
+    assert_eq!(
+        colour.transfer_characteristics().unwrap(),
+        TransferCharacteristics::Bt2100
+    );
+    assert_eq!(
+        colour.matrix_coefficients().unwrap(),
+        MatrixCoefficients::Bt2020Ncl
+    );
+    assert_eq!(colour.primaries().unwrap(), Primaries::Bt2020);
+
+    let metadata = colour.mastering_metadata().unwrap();
+
+    assert!((1000.0 - metadata.luminance_max().unwrap()).abs() < f64::EPSILON);
+    assert!((0.009999999776482582 - metadata.luminance_min().unwrap()).abs() < f64::EPSILON);
 }
 
 #[test]

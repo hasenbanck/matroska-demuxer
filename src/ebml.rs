@@ -73,8 +73,30 @@ pub(crate) fn collect_children<R: Read + Seek>(
     Ok(children)
 }
 
-/// Parses children of the same kind for the given master element as the given offset.
-pub(crate) fn parse_children_for_master<R, T>(
+/// Parses children of the same kind for the given master element.
+pub(crate) fn try_parse_children<R, T>(
+    r: &mut R,
+    fields: &[(ElementId, ElementData)],
+    parent_id: ElementId,
+    child_id: ElementId,
+) -> Result<Option<Vec<T::Output>>>
+where
+    R: Read + Seek,
+    T: ParsableElement<R>,
+{
+    let children = if let Some((_, ElementData::Location { offset, size })) =
+        fields.iter().find(|(id, _)| *id == parent_id)
+    {
+        let content_encodings = parse_children_inner::<_, T>(r, *offset, *size, child_id)?;
+        Some(content_encodings)
+    } else {
+        None
+    };
+    Ok(children)
+}
+
+/// Parses children of the same kind for the given master element at the given offset.
+pub(crate) fn parse_children_at_offset<R, T>(
     r: &mut R,
     offset: u64,
     master_id: ElementId,
@@ -85,12 +107,11 @@ where
     T: ParsableElement<R>,
 {
     let (data_offset, data_size) = expect_master(r, master_id, Some(offset))?;
-    let children = parse_children::<_, T>(r, data_offset, data_size, child_id)?;
+    let children = parse_children_inner::<_, T>(r, data_offset, data_size, child_id)?;
     Ok(children)
 }
 
-/// Parses children of the same kind.
-pub(crate) fn parse_children<R, T>(
+fn parse_children_inner<R, T>(
     r: &mut R,
     offset: u64,
     size: u64,
@@ -122,7 +143,7 @@ where
     R: Read + Seek,
     T: ParsableElement<R>,
 {
-    let audio = if let Some((_, element_data)) = fields.iter().find(|(id, _)| *id == element_id) {
+    let child = if let Some((_, element_data)) = fields.iter().find(|(id, _)| *id == element_id) {
         if let ElementData::Location { offset, size } = element_data {
             let children = collect_children(r, *offset, *size)?;
             let child = T::new(r, &children)?;
@@ -133,7 +154,7 @@ where
     } else {
         None
     };
-    Ok(audio)
+    Ok(child)
 }
 
 /// Expects to find element with the an Element ID for an unsigned integer inside a list of children.
