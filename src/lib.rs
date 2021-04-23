@@ -582,7 +582,7 @@ impl Video {
         self.pixel_crop_left
     }
 
-    ///  	The number of video pixels to remove on the right of the image.
+    /// The number of video pixels to remove on the right of the image.
     pub fn pixel_crop_right(&self) -> Option<u64> {
         self.pixel_crop_right
     }
@@ -988,6 +988,39 @@ impl ContentEncAesSettings {
     }
 }
 
+/// Contains all information relative to a seek point in the segment.
+#[derive(Clone, Debug)]
+pub struct CuePoint {
+    time: u64,
+    track_position: CueTrackPositions,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for CuePoint {
+    type Output = Self;
+
+    fn new(_r: &mut R, _fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        unimplemented!()
+    }
+}
+
+/// Contain positions for different tracks corresponding to the timestamp.
+#[derive(Clone, Debug)]
+pub struct CueTrackPositions {
+    track: u64,
+    cluster_position: u64,
+    relative_position: Option<u64>,
+    cue_duration: Option<u64>,
+    cue_block_number: Option<u64>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for CueTrackPositions {
+    type Output = Self;
+
+    fn new(_r: &mut R, _fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        unimplemented!()
+    }
+}
+
 /// Demuxer for Matroska files.
 #[derive(Clone, Debug)]
 pub struct MatroskaFile<R> {
@@ -996,6 +1029,7 @@ pub struct MatroskaFile<R> {
     seek_head: HashMap<ElementId, u64>,
     info: Info,
     tracks: Vec<TrackEntry>,
+    cue_points: Option<Vec<CuePoint>>,
 }
 
 impl<R: Read + Seek> MatroskaFile<R> {
@@ -1029,11 +1063,47 @@ impl<R: Read + Seek> MatroskaFile<R> {
             return Err(DemuxError::ElementNotFound(ElementId::Tracks));
         };
 
-        // TODO parse Cues element
+        let cue_points = if let Some(offset) = seek_head.get(&ElementId::Cues) {
+            let cue_points = parse_children_at_offset::<_, CuePoint>(
+                &mut file,
+                *offset,
+                ElementId::Cues,
+                ElementId::CuePoint,
+            )?;
+            Some(cue_points)
+        } else {
+            None
+        };
+
+        // TODO implement parsing of blocks (with an iterator? Or a nextBlock() function?)
+        /* TODO Implement seeking
+
+            How to search for a seek point:
+            let s = [0,50,90,100,150];
+            let seek = 95;
+            dbg!(s.binary_search_by(|e| e.cmp(&seek));
+            Err(3) => Position 2 is the next smaller.
+            Ok(2) => Position 2 is an exact fit.
+            Err(s.len()) => seek time not in slice.
+
+            To handle the case of seeking "out of the duration" we simply do a:
+
+            let seek_pos = match err = {
+                Ok(value) => value,
+                Err(value) => value - 1,
+            };
+            let seek_pos = cues.len().min(seek_pos)
+
+            With his seek_pos we have a starting point of a cluster (and maybe inside it too), from
+            which we need to do the linear search until we found the first frame after the timestamp
+            we want to seek to.
+
+            If we don't have this seek_pos, we will start the linear search from the start or the end
+            (start = timestamp is < duration / 2, end = timestamp is >= duration/2).
+        */
+
         // TODO parse Chapters
         // TODO parse Tags
-        // TODO how to parse blocks and how to do seeking?
-        // TODO we could add a BTreeMap and store the Cues in it. If no Cues have been found, we could (re-)build them too, if asked for (open(file: &mut File, build_cues: Bool)
 
         Ok(Self {
             file,
@@ -1041,6 +1111,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
             seek_head,
             info,
             tracks,
+            cue_points,
         })
     }
 
