@@ -1,8 +1,10 @@
 //! Enums exposed in the API.
 
 /// The Matrix Coefficients of the video used to derive luma and chroma values
-/// from red, green, and blue color primaries. For clarity, the value and meanings
-/// for `MatrixCoefficients` are adopted from Table 4 of ISO/IEC 23001-8:2016 or ITU-T H.273.
+/// from red, green, and blue color primaries.
+///
+/// For clarity, the value and meanings for `MatrixCoefficients` are adopted from
+/// Table 4 of ISO/IEC 23001-8:2016 or ITU-T H.273.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MatrixCoefficients {
     /// Unknown,
@@ -323,8 +325,10 @@ impl From<u64> for Range {
     }
 }
 
-/// The transfer characteristics of the video. For clarity, the value and meanings
-/// for `TransferCharacteristics` are adopted from Table 3 of ISO/IEC 23091-4 or ITU-T H.273.
+/// The transfer characteristics of the video.
+///
+/// For clarity, the value and meanings for `TransferCharacteristics` are adopted
+/// from Table 3 of ISO/IEC 23091-4 or ITU-T H.273.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TransferCharacteristics {
     /// Unknown.
@@ -387,8 +391,10 @@ impl From<u64> for TransferCharacteristics {
     }
 }
 
-/// The colour primaries of the video. For clarity, the value and meanings
-/// for Primaries are adopted from Table 2 of ISO/IEC 23091-4 or ITU-T H.273.
+/// The colour primaries of the video.
+///
+/// For clarity, the value and meanings for `Primaries` are adopted
+/// from Table 2 of ISO/IEC 23091-4 or ITU-T H.273.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Primaries {
     /// Unknown.
@@ -457,7 +463,9 @@ impl From<u64> for ContentEncodingType {
     }
 }
 
-/// The encryption algorithm used. `NotEncrypted` means that the contents have not been encrypted but only signed.
+/// The encryption algorithm used.
+///
+/// `NotEncrypted` means that the contents have not been encrypted but only signed.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ContentEncAlgo {
     /// Unknown.

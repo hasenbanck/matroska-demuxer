@@ -4,6 +4,13 @@
 #![deny(clippy::panic)]
 #![deny(clippy::unwrap_used)]
 //! A demuxer that can demux Matroska and WebM container files.
+//!
+//! # Example:
+//! ```ignore
+//! let file = File::open("test.mkv").unwrap();
+//! let mkv = MatroskaFile::open(file).unwrap();
+//! assert!(mkv.tracks().len() >= 1);
+//! ```
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -303,12 +310,12 @@ impl<R: Read + Seek> ParsableElement<R> for TrackEntry {
 }
 
 impl TrackEntry {
-    /// The track number as used in the Block Header.
+    /// The track number as used in the block header.
     pub fn track_number(&self) -> NonZeroU64 {
         self.track_number
     }
 
-    /// A unique ID to identify the Track.
+    /// A unique ID to identify the track.
     pub fn track_uid(&self) -> NonZeroU64 {
         self.track_uid
     }
@@ -668,7 +675,7 @@ impl<R: Read + Seek> ParsableElement<R> for Colour {
 }
 
 impl Colour {
-    /// The Matrix Coefficients of the video used to derive luma and chroma values
+    /// The matrix coefficients of the video used to derive luma and chroma values
     /// from red, green, and blue color primaries.
     pub fn matrix_coefficients(&self) -> Option<MatrixCoefficients> {
         self.matrix_coefficients
@@ -690,7 +697,7 @@ impl Colour {
         self.chroma_subsampling_vert
     }
 
-    /// The amount of pixels to remove in the Cb channel for every pixel not removed horizontally
+    /// The amount of pixels to remove in the Cb channel for every pixel not removed horizontally.
     pub fn cb_subsampling_horz(&self) -> Option<u64> {
         self.cb_subsampling_horz
     }
@@ -875,7 +882,8 @@ impl<R: Read + Seek> ParsableElement<R> for ContentEncoding {
 }
 
 impl ContentEncoding {
-    /// Tells when this modification was used during encoding/muxing starting with 0 and counting upwards.
+    /// Tells when this modification was used during encoding / muxing starting
+    /// with 0 and counting upwards.
     pub fn order(&self) -> u64 {
         self.order
     }
