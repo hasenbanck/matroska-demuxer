@@ -74,6 +74,45 @@ pub(crate) fn collect_children<R: Read + Seek>(
     Ok(children)
 }
 
+/// Parses children of the same kind for the given master element as the given offset.
+pub(crate) fn parse_children_for_master<R, T>(
+    r: &mut R,
+    offset: u64,
+    master_id: ElementId,
+    child_id: ElementId,
+) -> Result<Vec<T::Output>>
+where
+    R: Read + Seek,
+    T: ParsableElement<R>,
+{
+    let (data_offset, data_size) = expect_master(r, master_id, Some(offset))?;
+    let children = parse_children::<_, T>(r, data_offset, data_size, child_id)?;
+    Ok(children)
+}
+
+/// Parses children of the same kind.
+pub(crate) fn parse_children<R, T>(
+    r: &mut R,
+    offset: u64,
+    size: u64,
+    child_id: ElementId,
+) -> Result<Vec<T::Output>>
+where
+    R: Read + Seek,
+    T: ParsableElement<R>,
+{
+    let mut children = vec![];
+    let master_fields = collect_children(r, offset, size)?;
+    for (_, element_data) in master_fields.iter().filter(|(id, _)| *id == child_id) {
+        if let ElementData::Location { offset, size } = element_data {
+            let child_fields = collect_children(r, *offset, *size)?;
+            let track_entry = T::new(r, &child_fields)?;
+            children.push(track_entry)
+        }
+    }
+    Ok(children)
+}
+
 /// Tries to parse the child with the given Element ID from the given fields and reader.
 pub(crate) fn try_parse_child<R, T>(
     r: &mut R,

@@ -15,9 +15,10 @@ pub use error::DemuxError;
 
 use crate::ebml::{
     collect_children, expect_master, find_bool_or, find_custom_type, find_float_or, find_nonzero,
-    find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element,
-    parse_element_header, try_find_binary, try_find_date, try_find_float, try_find_nonzero,
-    try_find_string, try_find_unsigned, try_parse_child, ElementData, ParsableElement,
+    find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element, parse_children,
+    parse_children_for_master, parse_element_header, try_find_binary, try_find_date,
+    try_find_float, try_find_nonzero, try_find_string, try_find_unsigned, try_parse_child,
+    ElementData, ParsableElement,
 };
 use crate::element_id::{ElementId, ID_TO_ELEMENT_ID};
 
@@ -151,7 +152,7 @@ impl<R: Read + Seek> ParsableElement<R> for SeekEntry {
     }
 }
 
-/// The Info element.
+/// Contains general information about the segment.
 #[derive(Clone, Debug)]
 pub struct Info {
     timestamp_scale: NonZeroU64,
@@ -225,7 +226,7 @@ impl Info {
     }
 }
 
-/// The TrackEntry element.
+/// Describes a track.
 #[derive(Clone, Debug)]
 pub struct TrackEntry {
     track_number: NonZeroU64,
@@ -269,9 +270,9 @@ impl<R: Read + Seek> ParsableElement<R> for TrackEntry {
         let seek_pre_roll = try_find_unsigned(fields, ElementId::SeekPreRoll)?;
 
         let audio = try_parse_child::<_, Audio>(r, fields, ElementId::Audio)?;
+        let video = try_parse_child::<_, Video>(r, fields, ElementId::Video)?;
 
-        // TODO parse Video
-        // TODO parse ContentEncoding
+        let content_encodings = parse_content_encodings(r, fields)?;
 
         Ok(Self {
             track_number,
@@ -290,8 +291,8 @@ impl<R: Read + Seek> ParsableElement<R> for TrackEntry {
             codec_delay,
             seek_pre_roll,
             audio,
-            video: None,
-            content_encodings: None,
+            video,
+            content_encodings,
         })
     }
 }
@@ -400,7 +401,7 @@ impl TrackEntry {
         self.audio.as_ref()
     }
 
-    /// Audio settings.
+    /// Settings for several content encoding mechanisms like compression or encryption.
     pub fn content_encodings(&self) -> Option<&[ContentEncoding]> {
         match &self.content_encodings {
             None => None,
@@ -409,7 +410,7 @@ impl TrackEntry {
     }
 }
 
-/// The Audio element.
+/// Audio settings.
 #[derive(Clone, Copy, Debug)]
 pub struct Audio {
     sampling_frequency: f64,
@@ -468,7 +469,7 @@ impl Audio {
     }
 }
 
-/// The Video element.
+/// Video settings.
 #[derive(Clone, Copy, Debug)]
 pub struct Video {
     // FlagInterlaced
@@ -495,7 +496,7 @@ impl<R: Read + Seek> ParsableElement<R> for Video {
     }
 }
 
-/// The Colour element.
+/// Settings describing the colour format.
 #[derive(Clone, Copy, Debug)]
 pub struct Colour {
     // MatrixCoefficients
@@ -522,7 +523,7 @@ impl<R: Read + Seek> ParsableElement<R> for Colour {
     }
 }
 
-/// The MasteringMetadata element.
+/// SMPTE 2086 mastering data.
 #[derive(Clone, Copy, Debug)]
 pub struct MasteringMetadata {
     // PrimaryRChromaticityX
@@ -545,7 +546,7 @@ impl<R: Read + Seek> ParsableElement<R> for MasteringMetadata {
     }
 }
 
-/// The ContentEncoding element.
+/// Settings for one content encoding like compression or encryption.
 #[derive(Clone, Copy, Debug)]
 pub struct ContentEncoding {
     // ContentEncodingOrder
@@ -595,12 +596,23 @@ impl<R: Read + Seek> MatroskaFile<R> {
         }
 
         let info = parse_segment_info(&mut file, &mut seek_head)?;
-        let tracks = parse_tracks(&mut file, &mut seek_head)?;
+
+        let tracks = if let Some(offset) = seek_head.get(&ElementId::Tracks) {
+            parse_children_for_master::<_, TrackEntry>(
+                &mut file,
+                *offset,
+                ElementId::Tracks,
+                ElementId::TrackEntry,
+            )?
+        } else {
+            return Err(DemuxError::ElementNotFound(ElementId::Tracks));
+        };
 
         // TODO parse Cues element
+        // TODO parse Chapters
+        // TODO parse Tags
         // TODO how to parse blocks and how to do seeking?
         // TODO we could add a BTreeMap and store the Cues in it. If no Cues have been found, we could (re-)build them too, if asked for (open(file: &mut File, build_cues: Bool)
-        // TODO lazy loading: Chapters, Tagging
 
         Ok(Self {
             file,
@@ -784,27 +796,22 @@ fn parse_segment_info<R: Read + Seek>(
     }
 }
 
-fn parse_tracks<R: Read + Seek>(
+fn parse_content_encodings<R: Read + Seek>(
     r: &mut R,
-    seek_head: &mut HashMap<ElementId, u64>,
-) -> Result<Vec<TrackEntry>> {
-    let mut tracks = vec![];
-    if let Some(offset) = seek_head.get(&ElementId::Tracks) {
-        let (data_offset, data_size) = expect_master(r, ElementId::Tracks, Some(*offset))?;
-        let children = collect_children(r, data_offset, data_size)?;
-        for (element_id, element_data) in children {
-            if let ElementId::TrackEntry = element_id {
-                if let ElementData::Location { offset, size } = element_data {
-                    let children = collect_children(r, offset, size)?;
-                    let track_entry = TrackEntry::new(r, &children)?;
-                    tracks.push(track_entry)
-                }
-            }
-        }
-        Ok(tracks)
+    fields: &[(ElementId, ElementData)],
+) -> Result<Option<Vec<ContentEncoding>>> {
+    let content_encodings = if let Some((_, ElementData::Location { offset, size })) = fields
+        .iter()
+        .find(|(id, _)| *id == ElementId::ContentEncodings)
+    {
+        let content_encodings =
+            parse_children::<_, ContentEncoding>(r, *offset, *size, ElementId::ContentEncoding)?;
+        Some(content_encodings)
     } else {
-        Err(DemuxError::ElementNotFound(ElementId::Info))
-    }
+        None
+    };
+
+    Ok(content_encodings)
 }
 
 #[cfg(test)]

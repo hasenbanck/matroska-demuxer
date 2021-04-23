@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
 
-/// The supported Element ID.
+/// The IDs of the supported elements.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[allow(missing_docs)]
 pub enum ElementId {
