@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::num::NonZeroU64;
 
-use matroska_demux::{MatroskaFile, TrackType};
+use matroska_demux::{MatroskaFile, TrackEntry, TrackType};
 
 #[test]
 pub fn parse_simple_mkv() {
@@ -139,6 +139,28 @@ pub fn parse_test5_mkv() {
             .filter(|t| t.track_type() == TrackType::Subtitle)
             .count(),
         8
+    );
+
+    let audio_tracks: Vec<TrackEntry> = mkv
+        .tracks()
+        .iter()
+        .filter(|t| t.track_type() == TrackType::Audio)
+        .cloned()
+        .collect();
+
+    assert!((48000.0 - audio_tracks[0].audio().unwrap().sampling_frequency()).abs() < f64::EPSILON);
+    assert_eq!(audio_tracks[0].audio().unwrap().channels().get(), 2);
+
+    assert!((22050.0 - audio_tracks[1].audio().unwrap().sampling_frequency()).abs() < f64::EPSILON);
+    assert!(
+        (44100.0
+            - audio_tracks[1]
+                .audio()
+                .unwrap()
+                .output_sampling_frequency()
+                .unwrap())
+        .abs()
+            < f64::EPSILON
     );
 }
 

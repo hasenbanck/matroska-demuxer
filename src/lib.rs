@@ -14,10 +14,10 @@ pub use enums::*;
 pub use error::DemuxError;
 
 use crate::ebml::{
-    collect_children, expect_master, find_bool_or, find_custom_type, find_nonzero, find_nonzero_or,
-    find_string, find_unsigned, next_element, parse_ebml_header, parse_element_header,
-    try_find_binary, try_find_date, try_find_float, try_find_nonzero, try_find_string,
-    try_find_unsigned, ElementData,
+    collect_children, expect_master, find_bool_or, find_custom_type, find_float_or, find_nonzero,
+    find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element,
+    parse_element_header, try_find_binary, try_find_date, try_find_float, try_find_nonzero,
+    try_find_string, try_find_unsigned, try_parse_child, ElementData, ParsableElement,
 };
 use crate::element_id::{ElementId, ID_TO_ELEMENT_ID};
 
@@ -25,6 +25,9 @@ mod ebml;
 pub(crate) mod element_id;
 mod enums;
 mod error;
+
+/// The doc type version this demuxer supports.
+const DEMUXER_DOC_TYPE_VERSION: u64 = 4;
 
 type Result<T> = std::result::Result<T, DemuxError>;
 
@@ -40,27 +43,59 @@ pub struct EbmlHeader {
     doc_type_read_version: u64,
 }
 
-impl EbmlHeader {
-    pub(crate) fn new(fields: &[(ElementId, ElementData)]) -> Result<Self> {
+impl<R: Read + Seek> ParsableElement<R> for EbmlHeader {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let version = try_find_unsigned(fields, ElementId::EbmlVersion)?;
         let read_version = try_find_unsigned(fields, ElementId::EbmlReadVersion)?;
-        let max_id_length = try_find_unsigned(fields, ElementId::EbmlMaxIdLength)?;
-        let max_size_length = try_find_unsigned(fields, ElementId::EbmlMaxSizeLength)?;
+        let max_id_length = find_unsigned_or(fields, ElementId::EbmlMaxIdLength, 4)?;
+        let max_size_length = find_unsigned_or(fields, ElementId::EbmlMaxSizeLength, 8)?;
         let doc_type = find_string(fields, ElementId::DocType)?;
         let doc_type_version = find_unsigned(fields, ElementId::DocTypeVersion)?;
         let doc_type_read_version = find_unsigned(fields, ElementId::DocTypeReadVersion)?;
 
+        if doc_type != "matroska" && doc_type != "webm" {
+            return Err(DemuxError::InvalidEbmlHeader(format!(
+                "unsupported DocType: {}",
+                doc_type
+            )));
+        }
+
+        if doc_type_read_version >= DEMUXER_DOC_TYPE_VERSION {
+            return Err(DemuxError::InvalidEbmlHeader(format!(
+                "unsupported DocTypeReadVersion: {}",
+                doc_type_read_version
+            )));
+        }
+
+        if max_id_length > 4 {
+            return Err(DemuxError::InvalidEbmlHeader(format!(
+                "unsupported MaxIdLength: {}",
+                max_id_length
+            )));
+        }
+
+        if max_size_length > 8 {
+            return Err(DemuxError::InvalidEbmlHeader(format!(
+                "unsupported MaxSizeLength: {}",
+                max_size_length
+            )));
+        }
+
         Ok(Self {
             version,
             read_version,
-            max_id_length: max_id_length.unwrap_or(4),
-            max_size_length: max_size_length.unwrap_or(8),
+            max_id_length,
+            max_size_length,
             doc_type,
             doc_type_version,
             doc_type_read_version,
         })
     }
+}
 
+impl EbmlHeader {
     /// The EBML version used to create the file.
     pub fn version(&self) -> Option<u64> {
         self.version
@@ -104,8 +139,10 @@ pub(crate) struct SeekEntry {
     offset: u64,
 }
 
-impl SeekEntry {
-    pub(crate) fn new(fields: &[(ElementId, ElementData)]) -> Result<SeekEntry> {
+impl<R: Read + Seek> ParsableElement<R> for SeekEntry {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let id: u32 = find_unsigned(fields, ElementId::SeekId)?.try_into()?;
         let id = *ID_TO_ELEMENT_ID.get(&id).unwrap_or(&ElementId::Unknown);
         let offset = find_unsigned(fields, ElementId::SeekPosition)?;
@@ -125,8 +162,10 @@ pub struct Info {
     writing_app: String,
 }
 
-impl Info {
-    pub(crate) fn new(fields: &[(ElementId, ElementData)]) -> Result<Info> {
+impl<R: Read + Seek> ParsableElement<R> for Info {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let timestamp_scale = find_nonzero_or(fields, ElementId::TimestampScale, 1000000)?;
         let duration = try_find_float(fields, ElementId::Duration)?;
         let date_utc = try_find_date(fields, ElementId::DateUtc)?;
@@ -149,7 +188,9 @@ impl Info {
             writing_app,
         })
     }
+}
 
+impl Info {
     /// Timestamp scale in nanoseconds (1_000_000 means all timestamps in the Segment are expressed in milliseconds).
     pub fn timestamp_scale(&self) -> NonZeroU64 {
         self.timestamp_scale
@@ -202,16 +243,15 @@ pub struct TrackEntry {
     codec_name: Option<String>,
     codec_delay: Option<u64>,
     seek_pre_roll: Option<u64>,
-    video: Option<Video>,
     audio: Option<Audio>,
+    video: Option<Video>,
     content_encodings: Option<Vec<ContentEncoding>>,
 }
 
-impl TrackEntry {
-    pub(crate) fn new<R: Seek + Read>(
-        r: &mut R,
-        fields: &[(ElementId, ElementData)],
-    ) -> Result<TrackEntry> {
+impl<R: Read + Seek> ParsableElement<R> for TrackEntry {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let track_number = find_nonzero(fields, ElementId::TrackNumber)?;
         let track_uid = find_nonzero(fields, ElementId::TrackUid)?;
         let track_type = find_custom_type(fields, ElementId::TrackType)?;
@@ -228,8 +268,9 @@ impl TrackEntry {
         let codec_delay = try_find_unsigned(fields, ElementId::CodecDelay)?;
         let seek_pre_roll = try_find_unsigned(fields, ElementId::SeekPreRoll)?;
 
-        // TODO parse AUDIO
-        // TODO parse VIDEO
+        let audio = try_parse_child::<_, Audio>(r, fields, ElementId::Audio)?;
+
+        // TODO parse Video
         // TODO parse ContentEncoding
 
         Ok(Self {
@@ -248,12 +289,14 @@ impl TrackEntry {
             codec_name,
             codec_delay,
             seek_pre_roll,
+            audio,
             video: None,
-            audio: None,
             content_encodings: None,
         })
     }
+}
 
+impl TrackEntry {
     /// The track number as used in the Block Header.
     pub fn track_number(&self) -> NonZeroU64 {
         self.track_number
@@ -367,19 +410,66 @@ impl TrackEntry {
 }
 
 /// The Audio element.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Audio {
-    // Default 8000.0, bigger than 0.0
     sampling_frequency: f64,
-    // bigger than 0.0
     output_sampling_frequency: Option<f64>,
-    // Default 1
     channels: NonZeroU64,
-    bit_depth: NonZeroU64,
+    bit_depth: Option<NonZeroU64>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for Audio {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let sampling_frequency = find_float_or(fields, ElementId::SamplingFrequency, 8000.0)?;
+        let output_sampling_frequency = try_find_float(fields, ElementId::OutputSamplingFrequency)?;
+        let channels = find_nonzero_or(fields, ElementId::Channels, 1)?;
+        let bit_depth = try_find_nonzero(fields, ElementId::BitDepth)?;
+
+        if sampling_frequency < 0.0 {
+            return Err(DemuxError::PositiveValueIsNotPositive);
+        }
+
+        if let Some(output_sampling_frequency) = output_sampling_frequency {
+            if output_sampling_frequency < 0.0 {
+                return Err(DemuxError::PositiveValueIsNotPositive);
+            }
+        }
+
+        Ok(Audio {
+            sampling_frequency,
+            output_sampling_frequency,
+            channels,
+            bit_depth,
+        })
+    }
+}
+
+impl Audio {
+    /// Sampling frequency in Hz.
+    pub fn sampling_frequency(&self) -> f64 {
+        self.sampling_frequency
+    }
+
+    /// Real output sampling frequency in Hz.
+    pub fn output_sampling_frequency(&self) -> Option<f64> {
+        self.output_sampling_frequency
+    }
+
+    /// Numbers of channels in the track.
+    pub fn channels(&self) -> NonZeroU64 {
+        self.channels
+    }
+
+    /// Bits per sample.
+    pub fn bit_depth(&self) -> Option<NonZeroU64> {
+        self.bit_depth
+    }
 }
 
 /// The Video element.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Video {
     // FlagInterlaced
     // StereoMode
@@ -397,8 +487,16 @@ pub struct Video {
     color: Option<Colour>,
 }
 
+impl<R: Read + Seek> ParsableElement<R> for Video {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        Ok(Self { color: None })
+    }
+}
+
 /// The Colour element.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Colour {
     // MatrixCoefficients
 // BitsPerChannel
@@ -416,8 +514,16 @@ pub struct Colour {
 // Vec<MasteringMetadata>
 }
 
+impl<R: Read + Seek> ParsableElement<R> for Colour {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        Ok(Self {})
+    }
+}
+
 /// The MasteringMetadata element.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct MasteringMetadata {
     // PrimaryRChromaticityX
 // PrimaryRChromaticityY
@@ -431,8 +537,16 @@ pub struct MasteringMetadata {
 // LuminanceMin
 }
 
+impl<R: Read + Seek> ParsableElement<R> for MasteringMetadata {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        Ok(Self {})
+    }
+}
+
 /// The ContentEncoding element.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ContentEncoding {
     // ContentEncodingOrder
 // ContentEncodingScope
@@ -442,6 +556,14 @@ pub struct ContentEncoding {
 // ContentEncKeyID
 // ContentEncAESSettings
 // AESSettingsCipherMode
+}
+
+impl<R: Read + Seek> ParsableElement<R> for ContentEncoding {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        Ok(Self {})
+    }
 }
 
 /// Demuxer for Matroska files.
@@ -458,27 +580,11 @@ impl<R: Read + Seek> MatroskaFile<R> {
     /// Opens a Matroska file.
     pub fn open(mut file: R) -> Result<Self> {
         let ebml_header = parse_ebml_header(&mut file)?;
+
         let (segment_data_offset, _) = expect_master(&mut file, ElementId::Segment, None)?;
         let optional_seek_head = search_seek_head(&mut file, segment_data_offset)?;
 
-        let mut seek_head = HashMap::new();
-
-        if let Some((seek_head_data_offset, seek_head_data_size)) = optional_seek_head {
-            let seek_head_entries =
-                collect_children(&mut file, seek_head_data_offset, seek_head_data_size)?;
-
-            for (entry_id, entry_data) in &seek_head_entries {
-                if let ElementId::Seek = entry_id {
-                    if let ElementData::Location { offset, size } = entry_data {
-                        let seek_fields = collect_children(&mut file, *offset, *size)?;
-                        if let Ok(seek_entry) = SeekEntry::new(&seek_fields) {
-                            let _ = seek_head
-                                .insert(seek_entry.id, segment_data_offset + seek_entry.offset);
-                        }
-                    }
-                }
-            }
-        }
+        let mut seek_head = parse_seek_head(&mut file, segment_data_offset, optional_seek_head)?;
 
         if seek_head.is_empty() {
             build_seek_head(&mut file, segment_data_offset, &mut seek_head)?;
@@ -519,6 +625,42 @@ impl<R: Read + Seek> MatroskaFile<R> {
     pub fn tracks(&self) -> &[TrackEntry] {
         &self.tracks
     }
+}
+
+/// Parses and verifies the EBML header.
+fn parse_ebml_header<R: Read + Seek>(r: &mut R) -> Result<EbmlHeader> {
+    let (master_offset, master_size) = expect_master(r, ElementId::Ebml, None)?;
+    let master_children = collect_children(r, master_offset, master_size)?;
+    let header = EbmlHeader::new(r, &master_children)?;
+    Ok(header)
+}
+
+/// Parses the seek head if present.
+fn parse_seek_head<R: Read + Seek>(
+    mut file: &mut R,
+    segment_data_offset: u64,
+    optional_seek_head: Option<(u64, u64)>,
+) -> Result<HashMap<ElementId, u64>> {
+    let mut seek_head = HashMap::new();
+
+    if let Some((seek_head_data_offset, seek_head_data_size)) = optional_seek_head {
+        let seek_head_entries =
+            collect_children(&mut file, seek_head_data_offset, seek_head_data_size)?;
+
+        for (entry_id, entry_data) in &seek_head_entries {
+            if let ElementId::Seek = entry_id {
+                if let ElementData::Location { offset, size } = entry_data {
+                    let seek_fields = collect_children(&mut file, *offset, *size)?;
+                    if let Ok(seek_entry) = SeekEntry::new(&mut file, &seek_fields) {
+                        let _ = seek_head
+                            .insert(seek_entry.id, segment_data_offset + seek_entry.offset);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(seek_head)
 }
 
 /// Seeks the SeekHead element and returns the offset into to it when present.
@@ -635,7 +777,7 @@ fn parse_segment_info<R: Read + Seek>(
     if let Some(offset) = seek_head.get(&ElementId::Info) {
         let (info_data_offset, info_data_size) = expect_master(r, ElementId::Info, Some(*offset))?;
         let children = collect_children(r, info_data_offset, info_data_size)?;
-        let info = Info::new(&children)?;
+        let info = Info::new(r, &children)?;
         Ok(info)
     } else {
         Err(DemuxError::ElementNotFound(ElementId::Info))
@@ -662,5 +804,34 @@ fn parse_tracks<R: Read + Seek>(
         Ok(tracks)
     } else {
         Err(DemuxError::ElementNotFound(ElementId::Info))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::panic)]
+
+    use std::io::Cursor;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_ebml_header() -> Result<()> {
+        let data: Vec<u8> = vec![
+            0x1A, 0x45, 0xDF, 0xA3, 0xA2, 0x42, 0x86, 0x81, 0x01, 0x42, 0xF7, 0x81, 0x01, 0x42,
+            0xF2, 0x81, 0x04, 0x42, 0xF3, 0x81, 0x08, 0x42, 0x82, 0x88, 0x6D, 0x61, 0x74, 0x72,
+            0x6F, 0x73, 0x6B, 0x61, 0x42, 0x87, 0x81, 0x04, 0x42, 0x85, 0x81, 0x02,
+        ];
+        let mut cursor = Cursor::new(data);
+        let ebml_header = parse_ebml_header(&mut cursor)?;
+        assert_eq!(ebml_header.version, Some(1));
+        assert_eq!(ebml_header.read_version, Some(1));
+        assert_eq!(ebml_header.max_id_length, 4);
+        assert_eq!(ebml_header.max_size_length, 8);
+        assert_eq!(&ebml_header.doc_type, "matroska");
+        assert_eq!(ebml_header.doc_type_version, 4);
+        assert_eq!(ebml_header.doc_type_read_version, 2);
+
+        Ok(())
     }
 }

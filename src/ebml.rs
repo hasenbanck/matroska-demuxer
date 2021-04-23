@@ -5,10 +5,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::num::NonZeroU64;
 
 use crate::element_id::{ElementId, ElementType, ELEMENT_ID_TO_TYPE, ID_TO_ELEMENT_ID};
-use crate::{DemuxError, EbmlHeader, Result};
-
-/// The doc type version this demuxer supports.
-const DEMUXER_DOC_TYPE_VERSION: u64 = 4;
+use crate::{DemuxError, Result};
 
 /// The data an element can contain.
 #[derive(Clone, Debug, PartialEq)]
@@ -27,42 +24,10 @@ pub enum ElementData {
     String(String),
 }
 
-/// Parses and verifies the EBML header.
-pub(crate) fn parse_ebml_header<R: Read + Seek>(r: &mut R) -> Result<EbmlHeader> {
-    let (master_offset, master_size) = expect_master(r, ElementId::Ebml, None)?;
-    let master_children = collect_children(r, master_offset, master_size)?;
+pub(crate) trait ParsableElement<R: Read + Seek> {
+    type Output;
 
-    let header = EbmlHeader::new(&master_children)?;
-
-    if header.doc_type != "matroska" && header.doc_type != "webm" {
-        return Err(DemuxError::InvalidEbmlHeader(format!(
-            "unsupported DocType: {}",
-            header.doc_type
-        )));
-    }
-
-    if header.doc_type_read_version >= DEMUXER_DOC_TYPE_VERSION {
-        return Err(DemuxError::InvalidEbmlHeader(format!(
-            "unsupported DocTypeReadVersion: {}",
-            header.doc_type_read_version
-        )));
-    }
-
-    if header.max_id_length > 4 {
-        return Err(DemuxError::InvalidEbmlHeader(format!(
-            "unsupported MaxIdLength: {}",
-            header.max_id_length
-        )));
-    }
-
-    if header.max_size_length > 8 {
-        return Err(DemuxError::InvalidEbmlHeader(format!(
-            "unsupported MaxSizeLength: {}",
-            header.max_size_length
-        )));
-    }
-
-    Ok(header)
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self::Output>;
 }
 
 /// Tries to parse an element with the given Element ID that returns a master element at the current location of the reader. Leaves the reader at the first byte after the master entry.
@@ -109,6 +74,30 @@ pub(crate) fn collect_children<R: Read + Seek>(
     Ok(children)
 }
 
+/// Tries to parse the child with the given Element ID from the given fields and reader.
+pub(crate) fn try_parse_child<R, T>(
+    r: &mut R,
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<T::Output>>
+where
+    R: Read + Seek,
+    T: ParsableElement<R>,
+{
+    let audio = if let Some((_, element_data)) = fields.iter().find(|(id, _)| *id == element_id) {
+        if let ElementData::Location { offset, size } = element_data {
+            let children = collect_children(r, *offset, *size)?;
+            let child = T::new(r, &children)?;
+            Some(child)
+        } else {
+            return Err(DemuxError::UnexpectedDataType);
+        }
+    } else {
+        None
+    };
+    Ok(audio)
+}
+
 /// Expects to find element with the an Element ID for an unsigned integer inside a list of children.
 pub(crate) fn find_unsigned(
     fields: &[(ElementId, ElementData)],
@@ -117,6 +106,33 @@ pub(crate) fn find_unsigned(
     let value =
         try_find_unsigned(fields, element_id)?.ok_or(DemuxError::ElementNotFound(element_id))?;
     Ok(value)
+}
+
+/// Expects to find element with the an Element ID for an unsigned integer inside a list of children, otherwise sets the default value.
+pub(crate) fn find_unsigned_or(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+    default: u64,
+) -> Result<u64> {
+    let value = try_find_unsigned(fields, element_id)?;
+    let value = value.unwrap_or(default);
+    Ok(value)
+}
+
+/// Tries to find an element with the Element ID for an unsigned integer inside a list of children.
+pub(crate) fn try_find_unsigned(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<u64>> {
+    if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+        if let ElementData::Unsigned(value) = data {
+            Ok(Some(*value))
+        } else {
+            Err(DemuxError::UnexpectedDataType)
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 /// Expects to find element with the an Element ID for an unsigned integer inside a list of children and converts it into a custom type.
@@ -155,6 +171,17 @@ pub(crate) fn find_nonzero(
     NonZeroU64::new(value).ok_or(DemuxError::NonZeroValueIsZero(element_id))
 }
 
+/// Tries to find an element with the Element ID for an non zero unsigned integer inside a list of children, otherwise sets the default value.
+pub(crate) fn find_nonzero_or(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+    default: u64,
+) -> Result<NonZeroU64> {
+    let value = try_find_unsigned(fields, element_id)?;
+    let value = value.unwrap_or(default);
+    NonZeroU64::new(value).ok_or(DemuxError::NonZeroValueIsZero(element_id))
+}
+
 /// Tries to find an element with the Element ID for an non zero unsigned integer inside a list of children.
 pub(crate) fn try_find_nonzero(
     fields: &[(ElementId, ElementData)],
@@ -168,31 +195,15 @@ pub(crate) fn try_find_nonzero(
     }
 }
 
-/// Tries to find an element with the Element ID for an non zero unsigned integer inside a list of children, otherwise sets the default value.
-pub(crate) fn find_nonzero_or(
+/// Expects to find an element with the Element ID for a float inside a list of children, otherwise sets the default value.
+pub(crate) fn find_float_or(
     fields: &[(ElementId, ElementData)],
     element_id: ElementId,
-    default: u64,
-) -> Result<NonZeroU64> {
-    let value = try_find_unsigned(fields, element_id)?;
+    default: f64,
+) -> Result<f64> {
+    let value = try_find_float(fields, element_id)?;
     let value = value.unwrap_or(default);
-    NonZeroU64::new(value).ok_or(DemuxError::NonZeroValueIsZero(element_id))
-}
-
-/// Tries to find an element with the Element ID for an unsigned integer inside a list of children.
-pub(crate) fn try_find_unsigned(
-    fields: &[(ElementId, ElementData)],
-    element_id: ElementId,
-) -> Result<Option<u64>> {
-    if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
-        if let ElementData::Unsigned(value) = data {
-            Ok(Some(*value))
-        } else {
-            Err(DemuxError::UnexpectedDataType)
-        }
-    } else {
-        Ok(None)
-    }
+    Ok(value)
 }
 
 /// Tries to find an element with the Element ID for a float inside a list of children.
@@ -677,26 +688,6 @@ mod tests {
         let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::MuxingApp);
         assert_eq!(element_data, ElementData::String("".to_owned()));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_ebml_header() -> Result<()> {
-        let data: Vec<u8> = vec![
-            0x1A, 0x45, 0xDF, 0xA3, 0xA2, 0x42, 0x86, 0x81, 0x01, 0x42, 0xF7, 0x81, 0x01, 0x42,
-            0xF2, 0x81, 0x04, 0x42, 0xF3, 0x81, 0x08, 0x42, 0x82, 0x88, 0x6D, 0x61, 0x74, 0x72,
-            0x6F, 0x73, 0x6B, 0x61, 0x42, 0x87, 0x81, 0x04, 0x42, 0x85, 0x81, 0x02,
-        ];
-        let mut cursor = Cursor::new(data);
-        let ebml_header = parse_ebml_header(&mut cursor)?;
-        assert_eq!(ebml_header.version, Some(1));
-        assert_eq!(ebml_header.read_version, Some(1));
-        assert_eq!(ebml_header.max_id_length, 4);
-        assert_eq!(ebml_header.max_size_length, 8);
-        assert_eq!(&ebml_header.doc_type, "matroska");
-        assert_eq!(ebml_header.doc_type_version, 4);
-        assert_eq!(ebml_header.doc_type_read_version, 2);
 
         Ok(())
     }
