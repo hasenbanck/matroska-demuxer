@@ -436,30 +436,6 @@ impl From<u64> for Primaries {
     }
 }
 
-/// Describes which Elements have been modified in this way.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ContentEncodingScope {
-    /// Unknown.
-    Unknown,
-    /// All frame contents, excluding lacing data.
-    AllFrameContent,
-    /// The track's private data.
-    PrivateData,
-    /// The next ContentEncoding (either the data inside ContentCompression and/or ContentEncryption).
-    NextContentEncoding,
-}
-
-impl From<u64> for ContentEncodingScope {
-    fn from(d: u64) -> Self {
-        match d {
-            1 => ContentEncodingScope::AllFrameContent,
-            2 => ContentEncodingScope::PrivateData,
-            4 => ContentEncodingScope::NextContentEncoding,
-            _ => ContentEncodingScope::Unknown,
-        }
-    }
-}
-
 /// Describing what kind of transformation is applied.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ContentEncodingType {

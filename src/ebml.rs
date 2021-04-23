@@ -70,7 +70,6 @@ pub(crate) fn collect_children<R: Read + Seek>(
             children.push((element_id, element_data))
         }
     }
-
     Ok(children)
 }
 
@@ -153,8 +152,7 @@ pub(crate) fn find_unsigned_or(
     element_id: ElementId,
     default: u64,
 ) -> Result<u64> {
-    let value = try_find_unsigned(fields, element_id)?;
-    let value = value.unwrap_or(default);
+    let value = try_find_unsigned(fields, element_id)?.unwrap_or(default);
     Ok(value)
 }
 
@@ -174,7 +172,38 @@ pub(crate) fn try_find_unsigned(
     }
 }
 
-/// Expects to find element with the an Element ID for an unsigned integer inside a list of children and converts it into a custom type.
+/// Tries to find an element with the Element ID for a custom type inside a list of children, otherwise sets the default value.
+pub(crate) fn try_find_custom_type_or<T: From<u64>>(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+    default: T,
+) -> Result<T> {
+    let value = match try_find_unsigned(fields, element_id)? {
+        None => default,
+        Some(value) => {
+            let value: T = value.into();
+            value
+        }
+    };
+    Ok(value)
+}
+
+/// Tries to find an element with the Element ID for a custom type inside a list of children.
+pub(crate) fn try_find_custom_type<T: From<u64>>(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<T>> {
+    let value = match try_find_unsigned(fields, element_id)? {
+        None => None,
+        Some(value) => {
+            let value = value.into();
+            Some(value)
+        }
+    };
+    Ok(value)
+}
+
+/// Expects to find element with the an Element ID for a custom type inside a list of children and converts it into a custom type.
 pub(crate) fn find_custom_type<T: From<u64>>(
     fields: &[(ElementId, ElementData)],
     element_id: ElementId,
@@ -216,8 +245,7 @@ pub(crate) fn find_nonzero_or(
     element_id: ElementId,
     default: u64,
 ) -> Result<NonZeroU64> {
-    let value = try_find_unsigned(fields, element_id)?;
-    let value = value.unwrap_or(default);
+    let value = try_find_unsigned(fields, element_id)?.unwrap_or(default);
     NonZeroU64::new(value).ok_or(DemuxError::NonZeroValueIsZero(element_id))
 }
 
@@ -240,8 +268,7 @@ pub(crate) fn find_float_or(
     element_id: ElementId,
     default: f64,
 ) -> Result<f64> {
-    let value = try_find_float(fields, element_id)?;
-    let value = value.unwrap_or(default);
+    let value = try_find_float(fields, element_id)?.unwrap_or(default);
     Ok(value)
 }
 
@@ -374,7 +401,6 @@ pub(crate) fn parse_element_header<R: Read + Seek>(
     let element_id = *ID_TO_ELEMENT_ID.get(&id).unwrap_or(&ElementId::Unknown);
 
     let size = parse_data_size(r)?;
-
     Ok((element_id, size))
 }
 
@@ -417,30 +443,24 @@ fn parse_data_size<R: Read>(r: &mut R) -> Result<u64> {
 
 fn parse_id_value<R: Read>(r: &mut R, byte: u8, left: u8) -> Result<u32> {
     let shift: usize = (8 * (3 - left)).into();
-
     let mut bytes = [byte, 0, 0, 0];
     r.read_exact(&mut bytes[1..=left.into()])?;
-
     Ok(u32::from_be_bytes(bytes) >> shift)
 }
 
 fn parse_size_value<R: Read>(r: &mut R, byte: u8, left: u8) -> Result<u64> {
     let shift: usize = (8 * (7 - left)).into();
-
     let mut bytes = [byte, 0, 0, 0, 0, 0, 0, 0];
     r.read_exact(&mut bytes[1..=left.into()])?;
-
     Ok(u64::from_be_bytes(bytes) >> shift)
 }
 
 fn parse_location<R: Read + Seek>(r: &mut R, size: u64) -> Result<(u64, u64)> {
     let offset = r.stream_position()?;
-
     // We skip the data and set the reader to the next element, if the size is known.
     if size != u64::MAX {
         let _ = r.seek(SeekFrom::Start(offset + size))?;
     }
-
     Ok((offset, size))
 }
 
@@ -453,10 +473,8 @@ fn parse_unsigned<R: Read>(r: &mut R, size: u64) -> Result<u64> {
         return Err(DemuxError::WrongIntegerSize(size));
     }
     let shift = (8 * (8 - size)) as i64;
-
     let mut bytes = [0u8; 8];
     r.read_exact(&mut bytes[0..size as usize])?;
-
     Ok(u64::from_be_bytes(bytes) >> shift)
 }
 
@@ -469,10 +487,8 @@ fn parse_signed<R: Read>(r: &mut R, size: u64) -> Result<i64> {
         return Err(DemuxError::WrongIntegerSize(size));
     }
     let shift = (8 * (8 - size)) as i64;
-
     let mut bytes = [0u8; 8];
     r.read_exact(&mut bytes[0..size as usize])?;
-
     Ok(i64::from_be_bytes(bytes) >> shift)
 }
 
@@ -502,10 +518,8 @@ fn parse_date<R: Read>(r: &mut R, size: u64) -> Result<i64> {
         return Err(DemuxError::WrongDateSize(size));
     }
     let shift = (8 * (8 - size)) as i64;
-
     let mut bytes = [0u8; 8];
     r.read_exact(&mut bytes[0..size as usize])?;
-
     Ok(i64::from_be_bytes(bytes) >> shift)
 }
 
@@ -513,11 +527,9 @@ fn parse_string<R: Read>(r: &mut R, size: u64) -> Result<String> {
     if size == 0 {
         return Ok(String::from(""));
     }
-
     let size: usize = size.try_into()?;
     let mut bytes = vec![0u8; size];
     r.read_exact(&mut bytes[0..size])?;
-
     Ok(String::from_utf8(bytes)?)
 }
 

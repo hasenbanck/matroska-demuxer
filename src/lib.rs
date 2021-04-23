@@ -16,9 +16,9 @@ pub use error::DemuxError;
 use crate::ebml::{
     collect_children, expect_master, find_bool_or, find_custom_type, find_float_or, find_nonzero,
     find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element, parse_children,
-    parse_children_for_master, parse_element_header, try_find_binary, try_find_date,
-    try_find_float, try_find_nonzero, try_find_string, try_find_unsigned, try_parse_child,
-    ElementData, ParsableElement,
+    parse_children_for_master, parse_element_header, try_find_binary, try_find_custom_type,
+    try_find_custom_type_or, try_find_date, try_find_float, try_find_nonzero, try_find_string,
+    try_find_unsigned, try_parse_child, ElementData, ParsableElement,
 };
 use crate::element_id::{ElementId, ID_TO_ELEMENT_ID};
 
@@ -547,23 +547,138 @@ impl<R: Read + Seek> ParsableElement<R> for MasteringMetadata {
 }
 
 /// Settings for one content encoding like compression or encryption.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct ContentEncoding {
-    // ContentEncodingOrder
-// ContentEncodingScope
-// ContentEncodingType
-// ContentEncryption
-// ContentEncAlgo
-// ContentEncKeyID
-// ContentEncAESSettings
-// AESSettingsCipherMode
+    order: u64,
+    scope: u64,
+    encoding_type: ContentEncodingType,
+    encryption: Option<ContentEncryption>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for ContentEncoding {
     type Output = Self;
 
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let order = find_unsigned_or(fields, ElementId::ContentEncodingOrder, 0)?;
+        let scope = find_unsigned_or(fields, ElementId::ContentEncodingScope, 1)?;
+
+        let encoding_type = try_find_custom_type_or(
+            fields,
+            ElementId::ContentEncodingType,
+            ContentEncodingType::Compression,
+        )?;
+
+        let encryption =
+            try_parse_child::<_, ContentEncryption>(r, fields, ElementId::ContentEncryption)?;
+
+        Ok(Self {
+            order,
+            scope,
+            encoding_type,
+            encryption,
+        })
+    }
+}
+
+impl ContentEncoding {
+    /// Tells when this modification was used during encoding/muxing starting with 0 and counting upwards.
+    pub fn order(&self) -> u64 {
+        self.order
+    }
+
+    /// A bit field that describes which Elements have been modified in this way.
+    ///
+    /// Values (big-endian) can be OR'ed:
+    ///
+    /// 1 - All frame contents, excluding lacing data.
+    /// 2 - The track's private data.
+    /// 4 - The next ContentEncoding.
+    pub fn scope(&self) -> u64 {
+        self.scope
+    }
+
+    /// Describes what kind of transformation is applied.
+    pub fn encoding_type(&self) -> ContentEncodingType {
+        self.encoding_type
+    }
+
+    /// Settings describing the encryption used.
+    pub fn encryption(&self) -> Option<&ContentEncryption> {
+        self.encryption.as_ref()
+    }
+}
+
+/// Settings describing the encryption used.
+#[derive(Clone, Debug)]
+pub struct ContentEncryption {
+    algo: ContentEncAlgo,
+    key_id: Option<Vec<u8>>,
+    aes_settings: Option<ContentEncAesSettings>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for ContentEncryption {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let algo = try_find_custom_type_or(
+            fields,
+            ElementId::ContentEncAlgo,
+            ContentEncAlgo::NotEncrypted,
+        )?;
+        let key_id = try_find_binary(r, fields, ElementId::ContentEncKeyId)?;
+        let aes_settings = parse_aes_settings(r, fields)?;
+
+        Ok(Self {
+            algo,
+            key_id,
+            aes_settings,
+        })
+    }
+}
+
+impl ContentEncryption {
+    /// The encryption algorithm used.
+    pub fn algo(&self) -> ContentEncAlgo {
+        self.algo
+    }
+
+    /// The encryption algorithm used.
+    pub fn key_id(&self) -> Option<&[u8]> {
+        match &self.key_id {
+            None => None,
+            Some(key_id) => Some(key_id),
+        }
+    }
+
+    /// The encryption algorithm used.
+    pub fn aes_settings(&self) -> Option<&ContentEncAesSettings> {
+        self.aes_settings.as_ref()
+    }
+}
+
+/// Settings describing the encryption algorithm used.
+#[derive(Clone, Debug)]
+pub struct ContentEncAesSettings {
+    aes_settings_cipher_mode: Option<AesSettingsCipherMode>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for ContentEncAesSettings {
+    type Output = Self;
+
     fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
-        Ok(Self {})
+        let aes_settings_cipher_mode =
+            try_find_custom_type(fields, ElementId::AesSettingsCipherMode)?;
+
+        Ok(Self {
+            aes_settings_cipher_mode,
+        })
+    }
+}
+
+impl ContentEncAesSettings {
+    /// The AES cipher mode used in the encryption.
+    pub fn aes_settings_cipher_mode(&self) -> Option<AesSettingsCipherMode> {
+        self.aes_settings_cipher_mode
     }
 }
 
@@ -812,6 +927,31 @@ fn parse_content_encodings<R: Read + Seek>(
     };
 
     Ok(content_encodings)
+}
+
+fn parse_aes_settings<R: Read + Seek>(
+    r: &mut R,
+    fields: &[(ElementId, ElementData)],
+) -> Result<Option<ContentEncAesSettings>> {
+    let aes_settings = if let Some((_, data)) = fields
+        .iter()
+        .find(|(id, data)| *id == ElementId::ContentEncAesSettings)
+    {
+        if let ElementData::Location { offset, size } = data {
+            let settings_fields = collect_children(r, *offset, *size)?;
+            try_parse_child::<_, ContentEncAesSettings>(
+                r,
+                &settings_fields,
+                ElementId::ContentEncAesSettings,
+            )?
+        } else {
+            return Err(DemuxError::UnexpectedDataType);
+        }
+    } else {
+        None
+    };
+
+    Ok(aes_settings)
 }
 
 #[cfg(test)]

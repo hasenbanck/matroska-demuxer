@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::num::NonZeroU64;
 
-use matroska_demux::{MatroskaFile, TrackEntry, TrackType};
+use matroska_demux::{ContentEncodingType, MatroskaFile, TrackEntry, TrackType};
 
 #[test]
 pub fn parse_simple_mkv() {
@@ -81,6 +81,18 @@ pub fn parse_test3_mkv() {
     assert_eq!(mkv.info().date_utc().unwrap(), 304119805000000000);
 
     assert_eq!(mkv.tracks().len(), 2);
+
+    assert_eq!(mkv.tracks()[0].content_encodings().unwrap().len(), 1);
+    assert_eq!(mkv.tracks()[1].content_encodings().unwrap().len(), 1);
+
+    assert_eq!(
+        mkv.tracks()[0].content_encodings().unwrap()[0].encoding_type(),
+        ContentEncodingType::Compression
+    );
+    assert_eq!(
+        mkv.tracks()[1].content_encodings().unwrap()[0].encoding_type(),
+        ContentEncodingType::Compression
+    );
 }
 
 #[test]
