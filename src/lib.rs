@@ -582,8 +582,8 @@ impl<R: Read + Seek> MatroskaFile<R> {
         let ebml_header = parse_ebml_header(&mut file)?;
 
         let (segment_data_offset, _) = expect_master(&mut file, ElementId::Segment, None)?;
-        let optional_seek_head = search_seek_head(&mut file, segment_data_offset)?;
 
+        let optional_seek_head = search_seek_head(&mut file, segment_data_offset)?;
         let mut seek_head = parse_seek_head(&mut file, segment_data_offset, optional_seek_head)?;
 
         if seek_head.is_empty() {
