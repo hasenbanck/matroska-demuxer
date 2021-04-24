@@ -73,7 +73,7 @@ pub(crate) fn collect_children<R: Read + Seek>(
     Ok(children)
 }
 
-/// Parses children of the same kind for the given master element.
+/// Tries to parses children of the same kind for the given master element.
 pub(crate) fn try_parse_children<R, T>(
     r: &mut R,
     fields: &[(ElementId, ElementData)],
@@ -160,8 +160,8 @@ where
 {
     let child = if let Some((_, element_data)) = fields.iter().find(|(id, _)| *id == element_id) {
         if let ElementData::Location { offset, size } = element_data {
-            let children = collect_children(r, *offset, *size)?;
-            let child = T::new(r, &children)?;
+            let child_fields = collect_children(r, *offset, *size)?;
+            let child = T::new(r, &child_fields)?;
             Some(child)
         } else {
             return Err(DemuxError::UnexpectedDataType);

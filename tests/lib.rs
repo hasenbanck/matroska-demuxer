@@ -9,7 +9,16 @@ use matroska_demux::{
 #[test]
 pub fn parse_simple_mkv() {
     let file = File::open("tests/data/simple.mkv").unwrap();
-    let _mkv = MatroskaFile::open(file).unwrap();
+    let mkv = MatroskaFile::open(file).unwrap();
+
+    let chapters = mkv.chapters().unwrap()[0].chapter_atoms();
+    assert_eq!(chapters[0].uid().get(), 1067995727130785153);
+    assert_eq!(chapters[0].time_start(), 0);
+    assert_eq!(chapters[0].time_end(), None);
+    assert_eq!(chapters[0].displays()[0].string(), "Intro");
+    assert_eq!(chapters[0].displays()[0].language(), None);
+    assert_eq!(chapters[0].displays()[0].language_ietf(), Some("en"));
+    assert_eq!(chapters[0].displays()[0].country(), None);
 }
 
 #[test]

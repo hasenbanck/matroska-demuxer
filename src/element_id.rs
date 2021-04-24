@@ -139,6 +139,7 @@ pub enum ElementId {
     ChapterDisplay,
     ChapString,
     ChapLanguage,
+    ChapLanguageIetf,
     ChapCountry,
     Tags,
     Tag,
@@ -156,7 +157,7 @@ pub enum ElementId {
 
 #[allow(unused_results)]
 pub(crate) static ELEMENT_ID_TO_TYPE: Lazy<HashMap<ElementId, ElementType>> = Lazy::new(|| {
-    let mut m = HashMap::with_capacity(143);
+    let mut m = HashMap::with_capacity(144);
     m.insert(ElementId::Ebml, ElementType::Master);
     m.insert(ElementId::EbmlVersion, ElementType::Unsigned);
     m.insert(ElementId::EbmlReadVersion, ElementType::Unsigned);
@@ -288,6 +289,7 @@ pub(crate) static ELEMENT_ID_TO_TYPE: Lazy<HashMap<ElementId, ElementType>> = La
     m.insert(ElementId::ChapterDisplay, ElementType::Master);
     m.insert(ElementId::ChapString, ElementType::String);
     m.insert(ElementId::ChapLanguage, ElementType::String);
+    m.insert(ElementId::ChapLanguageIetf, ElementType::String);
     m.insert(ElementId::ChapCountry, ElementType::String);
     m.insert(ElementId::Tags, ElementType::Master);
     m.insert(ElementId::Tag, ElementType::Master);
@@ -306,7 +308,7 @@ pub(crate) static ELEMENT_ID_TO_TYPE: Lazy<HashMap<ElementId, ElementType>> = La
 
 #[allow(unused_results)]
 pub(crate) static ID_TO_ELEMENT_ID: Lazy<HashMap<u32, ElementId>> = Lazy::new(|| {
-    let mut m = HashMap::with_capacity(143);
+    let mut m = HashMap::with_capacity(144);
     m.insert(0x1A45DFA3, ElementId::Ebml);
     m.insert(0x4286, ElementId::EbmlVersion);
     m.insert(0x42F7, ElementId::EbmlReadVersion);
@@ -437,6 +439,7 @@ pub(crate) static ID_TO_ELEMENT_ID: Lazy<HashMap<u32, ElementId>> = Lazy::new(||
     m.insert(0x80, ElementId::ChapterDisplay);
     m.insert(0x85, ElementId::ChapString);
     m.insert(0x437C, ElementId::ChapLanguage);
+    m.insert(0x437D, ElementId::ChapLanguageIetf);
     m.insert(0x437E, ElementId::ChapCountry);
     m.insert(0x1254C367, ElementId::Tags);
     m.insert(0x7373, ElementId::Tag);
@@ -453,23 +456,23 @@ pub(crate) static ID_TO_ELEMENT_ID: Lazy<HashMap<u32, ElementId>> = Lazy::new(||
     m
 });
 
-/// The types of elements a EBML file can have.
+/// The types of elements an EBML file can have.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ElementType {
     /// Unknown element.
     Unknown,
-    /// An element that contains other EBML elements als children.
+    /// An element that contains other elements als children.
     Master,
-    /// Unsigned integer,
+    /// Unsigned integer.
     Unsigned,
-    /// Signed integer,
+    /// Signed integer.
     Signed,
-    /// Float,
+    /// Float.
     Float,
-    /// Date,
+    /// Date.
     Date,
-    /// String
+    /// String.
     String,
-    /// Binary
+    /// Binary.
     Binary,
 }

@@ -176,13 +176,13 @@ pub enum FieldOrder {
     Unknown,
     /// Progressive.
     Progressive,
-    /// Top Field First
+    /// Top Field First.
     Tff,
-    /// Bottom Field First
+    /// Bottom Field First.
     Bff,
-    /// Top Field First (swapped)
+    /// Top Field First (swapped).
     BffSwapped,
-    /// Bottom Field First (swapped)
+    /// Bottom Field First (swapped).
     TffSwapped,
 }
 
@@ -206,33 +206,33 @@ pub enum StereoMode {
     Unknown,
     /// Mono.
     Mono,
-    /// Side by side (left eye first)
+    /// Side by side (left eye first).
     SideBySideLeftEyeFirst,
-    /// Top - bottom (right eye is first),
+    /// Top - bottom (right eye is first).
     TopBottomRightEyeFirst,
-    /// Top - bottom (left eye is first),
+    /// Top - bottom (left eye is first).
     TopBottomLeftEyeFirst,
-    /// Checkboard (right eye is first),
+    /// Checkboard (right eye is first).
     CheckboardRightEyeFirst,
-    /// Checkboard (left eye is first),
+    /// Checkboard (left eye is first).
     CheckboardLeftEyeFirst,
-    /// Row interleaved (right eye is first),
+    /// Row interleaved (right eye is first).
     RowInterleavedRightEyeFirst,
-    /// Row interleaved (left eye is first),
+    /// Row interleaved (left eye is first).
     RowInterleavedLeftEyeFirst,
-    /// Column interleaved (right eye is first),
+    /// Column interleaved (right eye is first).
     ColumnInterleavedRightEyeFirst,
-    /// Column interleaved (left eye is first),
+    /// Column interleaved (left eye is first).
     ColumnInterleavedLeftEyeFirst,
-    /// Anaglyph (cyan/red),
+    /// Anaglyph (cyan/red).
     AnaglyphCyanRed,
-    /// Side by side (right eye first),
+    /// Side by side (right eye first).
     SideBySideRightEyeFirst,
-    /// Anaglyph (green/magenta),
+    /// Anaglyph (green/magenta).
     AnaglyphGreenMagenta,
-    /// Both eyes laced in one Block (left eye is first),
+    /// Both eyes laced in one Block (left eye is first).
     LacedLeftEyeFirst,
-    /// Both eyes laced in one Block (right eye is first)
+    /// Both eyes laced in one Block (right eye is first).
     LacedRightEyeFirst,
 }
 
@@ -363,7 +363,7 @@ pub enum TransferCharacteristics {
     Bt2100,
     /// SMPTE ST 428-1.
     SmpteSt428_1,
-    /// ARIB STD-B67 (HLG)
+    /// ARIB STD-B67 (HLG).
     Hlg,
 }
 
@@ -470,17 +470,17 @@ impl From<u64> for ContentEncodingType {
 pub enum ContentEncAlgo {
     /// Unknown.
     Unknown,
-    /// Not encrypted,
+    /// Not encrypted.
     NotEncrypted,
-    /// DES - FIPS 46-3,
+    /// DES - FIPS 46-3.
     Des,
-    /// Triple DES - RFC 1851,
+    /// Triple DES - RFC 1851.
     TripleDes,
-    /// Twofish,
+    /// Twofish.
     Twofish,
-    /// Blowfish,
+    /// Blowfish.
     Blowfish,
-    /// AES - FIPS 187
+    /// AES - FIPS 187.
     Aes,
 }
 
@@ -503,9 +503,9 @@ impl From<u64> for ContentEncAlgo {
 pub enum AesSettingsCipherMode {
     /// Unknown.
     Unknown,
-    /// AES-CTR / Counter, NIST SP 800-38A,
+    /// AES-CTR / Counter, NIST SP 800-38A.
     Ctr,
-    /// AES-CBC / Cipher Block Chaining, NIST SP 800-38A
+    /// AES-CBC / Cipher Block Chaining, NIST SP 800-38A.
     Cbc,
 }
 

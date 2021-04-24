@@ -199,7 +199,7 @@ impl Info {
 
     /// General name of the Segment.
     pub fn title(&self) -> Option<&str> {
-        match &self.title {
+        match self.title.as_ref() {
             None => None,
             Some(title) => Some(title),
         }
@@ -339,7 +339,7 @@ impl TrackEntry {
 
     /// A human-readable track name.
     pub fn name(&self) -> Option<&str> {
-        match &self.name {
+        match self.name.as_ref() {
             None => None,
             Some(name) => Some(name),
         }
@@ -347,7 +347,7 @@ impl TrackEntry {
 
     /// Specifies the language of the track.
     pub fn language(&self) -> Option<&str> {
-        match &self.language {
+        match self.language.as_ref() {
             None => None,
             Some(language) => Some(language),
         }
@@ -360,7 +360,7 @@ impl TrackEntry {
 
     /// Private data only known to the codec.
     pub fn codec_private(&self) -> Option<&[u8]> {
-        match &self.codec_private {
+        match self.codec_private.as_ref() {
             None => None,
             Some(data) => Some(data),
         }
@@ -368,7 +368,7 @@ impl TrackEntry {
 
     /// A human-readable string specifying the codec.
     pub fn codec_name(&self) -> Option<&str> {
-        match &self.codec_name {
+        match self.codec_name.as_ref() {
             None => None,
             Some(codec_name) => Some(codec_name),
         }
@@ -933,7 +933,7 @@ impl ContentEncryption {
 
     /// The encryption algorithm used.
     pub fn key_id(&self) -> Option<&[u8]> {
-        match &self.key_id {
+        match self.key_id.as_ref() {
             None => None,
             Some(key_id) => Some(key_id),
         }
@@ -968,6 +968,151 @@ impl ContentEncAesSettings {
     /// The AES cipher mode used in the encryption.
     pub fn aes_settings_cipher_mode(&self) -> Option<AesSettingsCipherMode> {
         self.aes_settings_cipher_mode
+    }
+}
+
+/// Contains all information about a segment edition.
+#[derive(Clone, Debug)]
+pub struct EditionEntry {
+    chapter_atoms: Vec<ChapterAtom>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for EditionEntry {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let chapter_atoms =
+            find_children_in_fields::<_, ChapterAtom>(r, fields, ElementId::ChapterAtom)?;
+
+        Ok(Self { chapter_atoms })
+    }
+}
+
+impl EditionEntry {
+    /// Contains the atom information to use as the chapter atom (apply to all tracks).
+    pub fn chapter_atoms(&self) -> &[ChapterAtom] {
+        self.chapter_atoms.as_ref()
+    }
+}
+
+/// Contains the atom information to use as the chapter atom.
+#[derive(Clone, Debug)]
+pub struct ChapterAtom {
+    uid: NonZeroU64,
+    string_uid: Option<String>,
+    time_start: u64,
+    time_end: Option<u64>,
+    displays: Vec<ChapterDisplay>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let uid = find_nonzero(fields, ElementId::ChapterUid)?;
+        let string_uid = try_find_string(fields, ElementId::ChapterStringUid)?;
+        let time_start = find_unsigned(fields, ElementId::ChapterTimeStart)?;
+        let time_end = try_find_unsigned(fields, ElementId::ChapterTimeEnd)?;
+
+        let displays =
+            find_children_in_fields::<_, ChapterDisplay>(r, fields, ElementId::ChapterDisplay)?;
+
+        Ok(Self {
+            uid,
+            string_uid,
+            time_start,
+            time_end,
+            displays,
+        })
+    }
+}
+
+impl ChapterAtom {
+    /// A unique ID to identify the Chapter.
+    pub fn uid(&self) -> NonZeroU64 {
+        self.uid
+    }
+
+    /// A unique string ID to identify the Chapter.
+    pub fn string_uid(&self) -> Option<&str> {
+        match self.string_uid.as_ref() {
+            None => None,
+            Some(string_uid) => Some(string_uid),
+        }
+    }
+
+    /// Timestamp of the start of Chapter.
+    pub fn time_start(&self) -> u64 {
+        self.time_start
+    }
+
+    /// Timestamp of the end of Chapter.
+    pub fn time_end(&self) -> Option<u64> {
+        self.time_end
+    }
+
+    /// Contains all possible strings to use for the chapter display.
+    pub fn displays(&self) -> &[ChapterDisplay] {
+        self.displays.as_ref()
+    }
+}
+
+/// Contains all possible strings to use for the chapter display.
+#[derive(Clone, Debug)]
+pub struct ChapterDisplay {
+    string: String,
+    language: Option<String>,
+    language_ietf: Option<String>,
+    country: Option<String>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for ChapterDisplay {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let string = find_string(fields, ElementId::ChapString)?;
+        let language = try_find_string(fields, ElementId::ChapLanguage)?;
+        let language_ietf = try_find_string(fields, ElementId::ChapLanguageIetf)?;
+        let country = try_find_string(fields, ElementId::ChapCountry)?;
+
+        Ok(Self {
+            string,
+            language,
+            language_ietf,
+            country,
+        })
+    }
+}
+
+impl ChapterDisplay {
+    /// Contains the string to use as the chapter atom.
+    pub fn string(&self) -> &str {
+        self.string.as_ref()
+    }
+
+    /// The languages corresponding to the string, in the bibliographic ISO-639-2 form.
+    pub fn language(&self) -> Option<&str> {
+        match self.language.as_ref() {
+            None => None,
+            Some(language) => Some(language),
+        }
+    }
+
+    /// Specifies the language according to BCP47 and using the IANA Language Subtag Registry.
+    pub fn language_ietf(&self) -> Option<&str> {
+        match self.language_ietf.as_ref() {
+            None => None,
+            Some(language_ietf) => Some(language_ietf),
+        }
+    }
+
+    /// The countries corresponding to the string, same 2 octets country-codes as in
+    /// Internet domains based on ISO3166-1 alpha-2 codes.
+    pub fn country(&self) -> Option<&str> {
+        match self.country.as_ref() {
+            None => None,
+            Some(country) => Some(country),
+        }
     }
 }
 
@@ -1051,6 +1196,7 @@ pub struct MatroskaFile<R> {
     info: Info,
     tracks: Vec<TrackEntry>,
     cue_points: Option<Vec<CuePoint>>,
+    chapters: Option<Vec<EditionEntry>>,
 }
 
 impl<R: Read + Seek> MatroskaFile<R> {
@@ -1071,30 +1217,31 @@ impl<R: Read + Seek> MatroskaFile<R> {
             find_first_cluster_offset(&mut file, segment_data_offset, &mut seek_head)?;
         }
 
-        let info = parse_segment_info(&mut file, &mut seek_head)?;
+        let info = parse_segment_info(&mut file, &seek_head)?;
 
-        let tracks = if let Some(offset) = seek_head.get(&ElementId::Tracks) {
-            parse_children_at_offset::<_, TrackEntry>(
-                &mut file,
-                *offset,
-                ElementId::Tracks,
-                ElementId::TrackEntry,
-            )?
-        } else {
-            return Err(DemuxError::ElementNotFound(ElementId::Tracks));
-        };
+        let tracks = try_parse_top_element_collection::<_, TrackEntry>(
+            &mut file,
+            &seek_head,
+            ElementId::Tracks,
+            ElementId::TrackEntry,
+        )?
+        .ok_or(DemuxError::ElementNotFound(ElementId::Tracks))?;
 
-        let cue_points = if let Some(offset) = seek_head.get(&ElementId::Cues) {
-            let cue_points = parse_children_at_offset::<_, CuePoint>(
-                &mut file,
-                *offset,
-                ElementId::Cues,
-                ElementId::CuePoint,
-            )?;
-            Some(cue_points)
-        } else {
-            None
-        };
+        let cue_points = try_parse_top_element_collection::<_, CuePoint>(
+            &mut file,
+            &seek_head,
+            ElementId::Cues,
+            ElementId::CuePoint,
+        )?;
+
+        let chapters = try_parse_top_element_collection::<_, EditionEntry>(
+            &mut file,
+            &seek_head,
+            ElementId::Chapters,
+            ElementId::EditionEntry,
+        )?;
+
+        // TODO parse Tags
 
         // TODO implement parsing of blocks (with an iterator? Or a nextBlock() function?)
         /* TODO Implement seeking
@@ -1123,9 +1270,6 @@ impl<R: Read + Seek> MatroskaFile<R> {
             (start = timestamp is < duration / 2, end = timestamp is >= duration/2).
         */
 
-        // TODO parse Chapters
-        // TODO parse Tags
-
         Ok(Self {
             file,
             ebml_header,
@@ -1133,6 +1277,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
             info,
             tracks,
             cue_points,
+            chapters,
         })
     }
 
@@ -1148,7 +1293,15 @@ impl<R: Read + Seek> MatroskaFile<R> {
 
     /// Returns the tracks of the file.
     pub fn tracks(&self) -> &[TrackEntry] {
-        &self.tracks
+        self.tracks.as_ref()
+    }
+
+    /// Returns the chapters of the file.
+    pub fn chapters(&self) -> Option<&[EditionEntry]> {
+        match self.chapters.as_ref() {
+            None => None,
+            Some(chapters) => Some(chapters),
+        }
     }
 }
 
@@ -1297,16 +1450,57 @@ fn find_first_cluster_offset<R: Read + Seek>(
 
 fn parse_segment_info<R: Read + Seek>(
     r: &mut R,
-    seek_head: &mut HashMap<ElementId, u64>,
+    seek_head: &HashMap<ElementId, u64>,
 ) -> Result<Info> {
     if let Some(offset) = seek_head.get(&ElementId::Info) {
         let (info_data_offset, info_data_size) = expect_master(r, ElementId::Info, Some(*offset))?;
-        let children = collect_children(r, info_data_offset, info_data_size)?;
-        let info = Info::new(r, &children)?;
+        let child_fields = collect_children(r, info_data_offset, info_data_size)?;
+        let info = Info::new(r, &child_fields)?;
         Ok(info)
     } else {
         Err(DemuxError::ElementNotFound(ElementId::Info))
     }
+}
+
+fn try_parse_top_element_collection<R, T>(
+    r: &mut R,
+    seek_head: &HashMap<ElementId, u64>,
+    master_id: ElementId,
+    child_id: ElementId,
+) -> Result<Option<Vec<T::Output>>>
+where
+    R: Read + Seek,
+    T: ParsableElement<R>,
+{
+    let cue_points = if let Some(offset) = seek_head.get(&master_id) {
+        let cue_points = parse_children_at_offset::<_, T>(r, *offset, master_id, child_id)?;
+        Some(cue_points)
+    } else {
+        None
+    };
+    Ok(cue_points)
+}
+
+fn find_children_in_fields<R, T>(
+    r: &mut R,
+    fields: &[(ElementId, ElementData)],
+    child_id: ElementId,
+) -> Result<Vec<T::Output>>
+where
+    R: Read + Seek,
+    T: ParsableElement<R>,
+{
+    let mut children = vec![];
+    for (_, data) in fields.iter().filter(|(id, _)| *id == child_id) {
+        if let ElementData::Location { offset, size } = data {
+            let child_fields = collect_children(r, *offset, *size)?;
+            let child = T::new(r, &child_fields)?;
+            children.push(child);
+        } else {
+            return Err(DemuxError::UnexpectedDataType);
+        }
+    }
+    Ok(children)
 }
 
 #[cfg(test)]
