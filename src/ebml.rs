@@ -249,6 +249,21 @@ pub(crate) fn find_custom_type<T: From<u64>>(
     Ok(value.into())
 }
 
+/// Tries to find an element with the Element ID for a boolean inside a list of children.
+pub(crate) fn try_find_bool(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<bool>> {
+    let value = try_find_unsigned(fields, element_id)?;
+    match value {
+        None => Ok(None),
+        Some(value) => match value {
+            0 => Ok(Some(false)),
+            _ => Ok(Some(true)),
+        },
+    }
+}
+
 /// Tries to find an element with the Element ID for a boolean inside a list of children, otherwise sets the default value.
 pub(crate) fn find_bool_or(
     fields: &[(ElementId, ElementData)],

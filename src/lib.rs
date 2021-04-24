@@ -29,7 +29,7 @@ use element_id::ID_TO_ELEMENT_ID;
 pub use enums::*;
 pub use error::DemuxError;
 
-use crate::ebml::parse_child;
+use crate::ebml::{parse_child, try_find_bool};
 
 mod ebml;
 pub(crate) mod element_id;
@@ -1116,6 +1116,143 @@ impl ChapterDisplay {
     }
 }
 
+/// A single metadata descriptor.
+#[derive(Clone, Debug)]
+pub struct Tag {
+    targets: Option<Targets>,
+    simple_tags: Vec<SimpleTag>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for Tag {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let targets = try_parse_child::<_, Targets>(r, fields, ElementId::Targets)?;
+        let simple_tags = find_children_in_fields::<_, SimpleTag>(r, fields, ElementId::SimpleTag)?;
+
+        Ok(Self {
+            targets,
+            simple_tags,
+        })
+    }
+}
+
+impl Tag {
+    /// Specifies which other elements the metadata represented by the tag applies to.
+    /// If empty or not present, then the Tag describes everything in the Segment.
+    pub fn targets(&self) -> Option<&Targets> {
+        self.targets.as_ref()
+    }
+
+    /// Contains general information about the target.
+    pub fn simple_tags(&self) -> &[SimpleTag] {
+        self.simple_tags.as_slice()
+    }
+}
+
+/// Specifies which other elements the metadata represented by the tag applies to.
+#[derive(Clone, Debug)]
+pub struct Targets {
+    target_type_value: Option<u64>,
+    target_type: Option<String>,
+    tag_track_uid: Option<u64>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for Targets {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let target_type_value = try_find_unsigned(fields, ElementId::TargetTypeValue)?;
+        let target_type = try_find_string(fields, ElementId::TargetType)?;
+        let tag_track_uid = try_find_unsigned(fields, ElementId::TagTrackUid)?;
+
+        Ok(Self {
+            target_type_value,
+            target_type,
+            tag_track_uid,
+        })
+    }
+}
+
+impl Targets {
+    /// A number to indicate the logical level of the target.
+    pub fn target_type_value(&self) -> Option<u64> {
+        self.target_type_value
+    }
+
+    /// A unique ID to identify the track(s) the tags belong to.
+    /// If the value is 0 at this level, the tags apply to all tracks in the Segment.
+    pub fn tag_track_uid(&self) -> Option<u64> {
+        self.tag_track_uid
+    }
+}
+
+/// Contains general information about the target.
+#[derive(Clone, Debug)]
+pub struct SimpleTag {
+    name: String,
+    language: Option<String>,
+    default: Option<bool>,
+    string: Option<String>,
+    binary: Option<Vec<u8>>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for SimpleTag {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let name = find_string(fields, ElementId::TagName)?;
+        let language = try_find_string(fields, ElementId::TagLanguage)?;
+        let default = try_find_bool(fields, ElementId::TagDefault)?;
+        let string = try_find_string(fields, ElementId::TagString)?;
+        let binary = try_find_binary(r, fields, ElementId::TagBinary)?;
+
+        Ok(Self {
+            name,
+            language,
+            default,
+            string,
+            binary,
+        })
+    }
+}
+
+impl SimpleTag {
+    /// The value of the tag.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Specifies the language of the tag.
+    pub fn language(&self) -> Option<&str> {
+        match self.language.as_ref() {
+            None => None,
+            Some(language) => Some(language),
+        }
+    }
+
+    /// Indicate if this is the default/original language to use for the given tag.
+    pub fn default(&self) -> Option<bool> {
+        self.default
+    }
+
+    /// The value of the tag, if it is a string.
+    pub fn string(&self) -> Option<&str> {
+        match self.string.as_ref() {
+            None => None,
+            Some(string) => Some(string),
+        }
+    }
+
+    /// The value of the tag, if it is binary.
+    pub fn binary(&self) -> Option<&[u8]> {
+        match self.binary.as_ref() {
+            None => None,
+            Some(binary) => Some(binary),
+        }
+    }
+}
+
 /// An entry in the seek head.
 #[derive(Clone, Copy, Debug)]
 struct SeekEntry {
@@ -1197,6 +1334,7 @@ pub struct MatroskaFile<R> {
     tracks: Vec<TrackEntry>,
     cue_points: Option<Vec<CuePoint>>,
     chapters: Option<Vec<EditionEntry>>,
+    tags: Option<Vec<Tag>>,
 }
 
 impl<R: Read + Seek> MatroskaFile<R> {
@@ -1241,7 +1379,12 @@ impl<R: Read + Seek> MatroskaFile<R> {
             ElementId::EditionEntry,
         )?;
 
-        // TODO parse Tags
+        let tags = try_parse_top_element_collection::<_, Tag>(
+            &mut file,
+            &seek_head,
+            ElementId::Tags,
+            ElementId::Tag,
+        )?;
 
         // TODO implement parsing of blocks (with an iterator? Or a nextBlock() function?)
         /* TODO Implement seeking
@@ -1278,6 +1421,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
             tracks,
             cue_points,
             chapters,
+            tags,
         })
     }
 
@@ -1301,6 +1445,15 @@ impl<R: Read + Seek> MatroskaFile<R> {
         match self.chapters.as_ref() {
             None => None,
             Some(chapters) => Some(chapters),
+        }
+    }
+
+    /// Element containing metadata describing Tracks, Editions,
+    /// Chapters, Attachments, or the Segment as a whole.
+    pub fn tags(&self) -> Option<&[Tag]> {
+        match self.tags.as_ref() {
+            None => None,
+            Some(tags) => Some(tags),
         }
     }
 }

@@ -518,12 +518,3 @@ impl From<u64> for AesSettingsCipherMode {
         }
     }
 }
-
-/// The value of a simple tag.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SimpleTagValue {
-    /// Unicode string.
-    String(String),
-    /// Binary data.
-    Binary(Vec<u8>),
-}

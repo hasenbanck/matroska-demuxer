@@ -19,6 +19,11 @@ pub fn parse_simple_mkv() {
     assert_eq!(chapters[0].displays()[0].language(), None);
     assert_eq!(chapters[0].displays()[0].language_ietf(), Some("en"));
     assert_eq!(chapters[0].displays()[0].country(), None);
+
+    let tags = mkv.tags().unwrap();
+    assert_eq!(tags[0].targets().unwrap().target_type_value().unwrap(), 50);
+    assert_eq!(tags[0].simple_tags()[0].name(), "ENCODER");
+    assert_eq!(tags[0].simple_tags()[0].string().unwrap(), "Lavf58.76.100");
 }
 
 #[test]
