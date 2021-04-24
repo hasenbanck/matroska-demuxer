@@ -14,6 +14,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryInto;
+use std::error::Error;
 use std::io::{Read, Seek, SeekFrom};
 use std::num::NonZeroU64;
 
@@ -50,6 +51,16 @@ pub struct Frame {
     pub timestamp: u64,
     /// The data of the frame.
     pub data: Vec<u8>,
+    /// Set when the codec should decode this frame but not display it.
+    pub invisible: bool,
+    /// Block marked this frame as a keyframe.
+    ///
+    /// Only set for files that use simple blocks.
+    pub keyframe: Option<bool>,
+    /// Set when the frame can be discarded during playing if needed.
+    ///
+    /// Only set for files that use simple blocks.
+    pub discardable: Option<bool>,
 }
 
 /// The EBML header of the file.
@@ -1349,8 +1360,18 @@ pub struct MatroskaFile<R> {
 
     /// The timestamp of the current cluster.
     cluster_timestamp: u64,
-    /// The locations of unread frames inside the current block (offset , size).
-    frame_locations: VecDeque<(u64, u64)>,
+    /// Queued frames of a block we are currently reading.
+    queued_frames: VecDeque<QueuedFrame>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct QueuedFrame {
+    track: u64,
+    timestamp: u64,
+    size: u64,
+    invisible: bool,
+    keyframe: Option<bool>,
+    discardable: Option<bool>,
 }
 
 impl<R: Read + Seek> MatroskaFile<R> {
@@ -1421,7 +1442,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
             chapters,
             tags,
             cluster_timestamp: 0,
-            frame_locations: VecDeque::with_capacity(8),
+            queued_frames: VecDeque::with_capacity(8),
         })
     }
 
@@ -1459,18 +1480,26 @@ impl<R: Read + Seek> MatroskaFile<R> {
 
     /// Reads the next frame data into the given `Frame`.
     ///
-    /// Returns `false` if no frame could be read, because of an EOF, or a corrupted file.
-    pub fn next_frame(&mut self, _frame: &mut Frame) -> Result<bool> {
-        // A block can contain many frames (with lacing).
-        // We first need to look if we are currently reading frames from a block (locations saved in self).
-        // If we have read all frames from the current block, we try to find the next block.
-        // When we find a cluster, we will try to read it's children up until we find a block group / simple block (which we will then parse).
-        //      -> Update cluster timestamp.
-        // When we find a block group, we will try to read all it's children up until a block (which we will parse right away).
-        //      -> Update reference block.
-        // When we found the next block with one frame, we read back to frame right away.
-        // When we found the next block with many frames, we read back the first frame right away and safe the other locations inside a buffer in self.
+    /// Returns `false` if we reached the end of the file and can't read any more frames.
+    pub fn next_frame(&mut self, frame: &mut Frame) -> Result<bool> {
+        // Read a frame that is left inside the block.
+        if let Some(queued_frame) = self.queued_frames.pop_front() {
+            let size: usize = queued_frame.size.try_into()?;
+            if frame.data.len() < size {
+                frame.data.resize(size, 0_u8);
+            }
 
+            frame.timestamp = queued_frame.timestamp;
+            frame.track = queued_frame.track;
+            frame.discardable = queued_frame.discardable;
+            frame.invisible = queued_frame.invisible;
+            frame.keyframe = queued_frame.keyframe;
+            self.file.read_exact(&mut frame.data[0..size])?;
+
+            return Ok(true);
+        }
+
+        // Search for the next block.
         loop {
             match next_element(&mut self.file) {
                 Ok((element_id, element_data)) => match element_id {
@@ -1492,19 +1521,31 @@ impl<R: Read + Seek> MatroskaFile<R> {
                     }
                     // Parse the block data.
                     ElementId::Block => {
-                        // TODO parse the block data (look for frames etc)
                         if let ElementData::Location { offset, size } = element_data {
+                            // TODO Parse the block header and handle the lacing.
+                            // TODO Parse the first frame.
+                            // TODO Parse the locations of the other frames and save them.
+                            // TODO How to we calculate the timestamp for a laced frame? Is it always the block's timestamp? (Most of the time used for audio frames, were we might just queue it anyhow)
+                            // TODO Make sure that the current location inside the read is the next frame.
                             let _ = self.file.seek(SeekFrom::Start(offset + size))?;
+                            break;
+                        } else {
+                            return Err(DemuxError::UnexpectedDataType);
                         }
-                        break;
                     }
                     // Parse the simple block data.
                     ElementId::SimpleBlock => {
-                        // TODO parse the block data (look for frames etc)
                         if let ElementData::Location { offset, size } = element_data {
+                            // TODO Parse the block header and handle the lacing.
+                            // TODO Parse the first frame.
+                            // TODO Parse the locations of the other frames and save them.
+                            // TODO How to we calculate the timestamp for a laced frame? Is it always the block's timestamp? (Most of the time used for audio frames, were we might just queue it anyhow)
+                            // TODO Make sure that the current location inside the read is the next frame.
                             let _ = self.file.seek(SeekFrom::Start(offset + size))?;
+                            break;
+                        } else {
+                            return Err(DemuxError::UnexpectedDataType);
                         }
-                        break;
                     }
                     // We ignore all other elements.
                     _ => {
@@ -1517,9 +1558,16 @@ impl<R: Read + Seek> MatroskaFile<R> {
                         }
                     }
                 },
-                // If we encounter an error, we assume that there
-                // are no more blocks to handle (EOF or corrupted file).
-                Err(_) => return Ok(false),
+                // If we encounter an IO error, we assume that there
+                // are no more blocks to handle (EOF).
+                Err(err) => {
+                    if let Some(err) = err.source() {
+                        if err.downcast_ref::<std::io::Error>().is_some() {
+                            return Ok(false);
+                        }
+                    }
+                    return Err(err);
+                }
             }
         }
 
@@ -1598,9 +1646,9 @@ fn parse_seek_head<R: Read + Seek>(
     Ok(seek_head)
 }
 
-/// Seeks the SeekHead element and returns the offset into to it when present.
+/// Seeks the SeekHead element and returns the offset into it when present.
 ///
-/// Specification states that the first non CRC-32 element should be a SeekHead if present.
+/// The specification states that the first non CRC-32 element should be a SeekHead if present.
 fn search_seek_head<R: Read + Seek>(
     r: &mut R,
     segment_data_offset: u64,
