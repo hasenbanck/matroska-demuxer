@@ -2,14 +2,14 @@ use std::fs::File;
 use std::num::NonZeroU64;
 
 use matroska_demux::{
-    ContentEncodingType, MatrixCoefficients, MatroskaFile, Primaries, TrackEntry, TrackType,
+    ContentEncodingType, Frame, MatrixCoefficients, MatroskaFile, Primaries, TrackEntry, TrackType,
     TransferCharacteristics,
 };
 
 #[test]
 pub fn parse_simple_mkv() {
     let file = File::open("tests/data/simple.mkv").unwrap();
-    let mkv = MatroskaFile::open(file).unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
 
     let chapters = mkv.chapters().unwrap()[0].chapter_atoms();
     assert_eq!(chapters[0].uid().get(), 1067995727130785153);
@@ -24,12 +24,19 @@ pub fn parse_simple_mkv() {
     assert_eq!(tags[0].targets().unwrap().target_type_value().unwrap(), 50);
     assert_eq!(tags[0].simple_tags()[0].name(), "ENCODER");
     assert_eq!(tags[0].simple_tags()[0].string().unwrap(), "Lavf58.76.100");
+
+    let mut frame = Frame::default();
+    let mut count = 0;
+    while mkv.next_frame(&mut frame).unwrap() {
+        count += 1;
+    }
+    assert_eq!(count, 31);
 }
 
 #[test]
 pub fn parse_hdr_mkv() {
     let file = File::open("tests/data/hdr.mkv").unwrap();
-    let mkv = MatroskaFile::open(file).unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
 
     let video_tracks: Vec<TrackEntry> = mkv
         .tracks()
@@ -59,12 +66,15 @@ pub fn parse_hdr_mkv() {
 
     assert!((1000.0 - metadata.luminance_max().unwrap()).abs() < f64::EPSILON);
     assert!((0.009999999776482582 - metadata.luminance_min().unwrap()).abs() < f64::EPSILON);
+
+    let mut frame = Frame::default();
+    while mkv.next_frame(&mut frame).unwrap() {}
 }
 
 #[test]
 pub fn parse_test1_mkv() {
     let file = File::open("tests/data/test1.mkv").unwrap();
-    let mkv = MatroskaFile::open(file).unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
 
     assert_eq!(mkv.ebml_header().version(), None);
     assert_eq!(mkv.ebml_header().read_version(), None);
@@ -87,6 +97,9 @@ pub fn parse_test1_mkv() {
     assert_eq!(mkv.info().writing_app(), "mkclean 0.5.5 ru from libebml v1.0.0 + libmatroska v1.0.0 + mkvmerge v4.1.1 ('Bouncin' Back') built on Jul  3 2010 22:54:08");
 
     assert_eq!(mkv.tracks().len(), 2);
+
+    let mut frame = Frame::default();
+    while mkv.next_frame(&mut frame).unwrap() {}
 }
 
 #[test]
@@ -115,7 +128,7 @@ pub fn parse_test2_mkv() {
 #[test]
 pub fn parse_test3_mkv() {
     let file = File::open("tests/data/test3.mkv").unwrap();
-    let mkv = MatroskaFile::open(file).unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
 
     assert_eq!(mkv.ebml_header().version(), None);
     assert_eq!(mkv.ebml_header().read_version(), None);
@@ -145,6 +158,9 @@ pub fn parse_test3_mkv() {
         mkv.tracks()[1].content_encodings().unwrap()[0].encoding_type(),
         ContentEncodingType::Compression
     );
+
+    let mut frame = Frame::default();
+    while mkv.next_frame(&mut frame).unwrap() {}
 }
 
 #[test]
@@ -172,7 +188,7 @@ pub fn parse_test4_mkv() {
 #[test]
 pub fn parse_test5_mkv() {
     let file = File::open("tests/data/test5.mkv").unwrap();
-    let mkv = MatroskaFile::open(file).unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
 
     assert_eq!(mkv.ebml_header().version(), Some(1));
     assert_eq!(mkv.ebml_header().read_version(), Some(1));
@@ -226,12 +242,15 @@ pub fn parse_test5_mkv() {
         .abs()
             < f64::EPSILON
     );
+
+    let mut frame = Frame::default();
+    while mkv.next_frame(&mut frame).unwrap() {}
 }
 
 #[test]
 pub fn parse_test6_mkv() {
     let file = File::open("tests/data/test6.mkv").unwrap();
-    let mkv = MatroskaFile::open(file).unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
 
     assert_eq!(mkv.ebml_header().max_id_length(), 4);
     assert_eq!(mkv.ebml_header().max_size_length(), 8);
@@ -244,12 +263,15 @@ pub fn parse_test6_mkv() {
     assert_eq!(mkv.info().date_utc().unwrap(), 304101115000000000);
 
     assert_eq!(mkv.tracks().len(), 2);
+
+    let mut frame = Frame::default();
+    while mkv.next_frame(&mut frame).unwrap() {}
 }
 
 #[test]
 pub fn parse_test7_mkv() {
     let file = File::open("tests/data/test7.mkv").unwrap();
-    let mkv = MatroskaFile::open(file).unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
 
     assert_eq!(mkv.ebml_header().version(), None);
     assert_eq!(mkv.ebml_header().read_version(), None);
@@ -267,12 +289,15 @@ pub fn parse_test7_mkv() {
     assert_eq!(mkv.info().date_utc().unwrap(), 304102823000000000);
 
     assert_eq!(mkv.tracks().len(), 2);
+
+    let mut frame = Frame::default();
+    while mkv.next_frame(&mut frame).unwrap() {}
 }
 
 #[test]
 pub fn parse_test8_mkv() {
     let file = File::open("tests/data/test8.mkv").unwrap();
-    let mkv = MatroskaFile::open(file).unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
 
     assert_eq!(mkv.ebml_header().version(), None);
     assert_eq!(mkv.ebml_header().read_version(), None);
@@ -290,4 +315,7 @@ pub fn parse_test8_mkv() {
     assert_eq!(mkv.info().date_utc().unwrap(), 304104134000000000);
 
     assert_eq!(mkv.tracks().len(), 2);
+
+    let mut frame = Frame::default();
+    while mkv.next_frame(&mut frame).unwrap() {}
 }

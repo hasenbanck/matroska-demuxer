@@ -12,7 +12,7 @@
 //! assert!(mkv.tracks().len() >= 1);
 //! ```
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::convert::TryInto;
 use std::io::{Read, Seek, SeekFrom};
 use std::num::NonZeroU64;
@@ -40,6 +40,17 @@ mod error;
 const DEMUXER_DOC_TYPE_VERSION: u64 = 4;
 
 type Result<T> = std::result::Result<T, DemuxError>;
+
+/// A data frame inside the Matroska container.
+#[derive(Clone, Debug, Default)]
+pub struct Frame {
+    /// The ID of the track.
+    pub track: u64,
+    /// The timestamp of the frame.
+    pub timestamp: u64,
+    /// The data of the frame.
+    pub data: Vec<u8>,
+}
 
 /// The EBML header of the file.
 #[derive(Clone, Debug)]
@@ -1335,6 +1346,11 @@ pub struct MatroskaFile<R> {
     cue_points: Option<Vec<CuePoint>>,
     chapters: Option<Vec<EditionEntry>>,
     tags: Option<Vec<Tag>>,
+
+    /// The timestamp of the current cluster.
+    cluster_timestamp: u64,
+    /// The locations of unread frames inside the current block (offset , size).
+    frame_locations: VecDeque<(u64, u64)>,
 }
 
 impl<R: Read + Seek> MatroskaFile<R> {
@@ -1352,7 +1368,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
         }
 
         if seek_head.get(&ElementId::Cluster).is_none() {
-            find_first_cluster_offset(&mut file, segment_data_offset, &mut seek_head)?;
+            find_first_cluster_offset(&mut file, &mut seek_head)?;
         }
 
         let info = parse_segment_info(&mut file, &seek_head)?;
@@ -1365,12 +1381,19 @@ impl<R: Read + Seek> MatroskaFile<R> {
         )?
         .ok_or(DemuxError::ElementNotFound(ElementId::Tracks))?;
 
-        let cue_points = try_parse_top_element_collection::<_, CuePoint>(
+        let mut cue_points = try_parse_top_element_collection::<_, CuePoint>(
             &mut file,
             &seek_head,
             ElementId::Cues,
             ElementId::CuePoint,
         )?;
+
+        // TODO test this
+        if let Some(cue_points) = cue_points.as_mut() {
+            cue_points
+                .iter_mut()
+                .for_each(|p| p.track_position.cluster_position += segment_data_offset);
+        }
 
         let chapters = try_parse_top_element_collection::<_, EditionEntry>(
             &mut file,
@@ -1386,32 +1409,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
             ElementId::Tag,
         )?;
 
-        // TODO implement parsing of blocks (with an iterator? Or a nextBlock() function?)
-        /* TODO Implement seeking
-
-            How to search for a seek point:
-            let s = [0,50,90,100,150];
-            let seek = 95;
-            dbg!(s.binary_search_by(|e| e.cmp(&seek));
-            Err(3) => Position 2 is the next smaller.
-            Ok(2) => Position 2 is an exact fit.
-            Err(s.len()) => seek time not in slice.
-
-            To handle the case of seeking "out of the duration" we simply do a:
-
-            let seek_pos = match err = {
-                Ok(value) => value,
-                Err(value) => value - 1,
-            };
-            let seek_pos = cues.len().min(seek_pos)
-
-            With his seek_pos we have a starting point of a cluster (and maybe inside it too), from
-            which we need to do the linear search until we found the first frame after the timestamp
-            we want to seek to.
-
-            If we don't have this seek_pos, we will start the linear search from the start or the end
-            (start = timestamp is < duration / 2, end = timestamp is >= duration/2).
-        */
+        seek_to_first_cluster(&mut file, &seek_head)?;
 
         Ok(Self {
             file,
@@ -1422,6 +1420,8 @@ impl<R: Read + Seek> MatroskaFile<R> {
             cue_points,
             chapters,
             tags,
+            cluster_timestamp: 0,
+            frame_locations: VecDeque::with_capacity(8),
         })
     }
 
@@ -1455,6 +1455,110 @@ impl<R: Read + Seek> MatroskaFile<R> {
             None => None,
             Some(tags) => Some(tags),
         }
+    }
+
+    /// Reads the next frame data into the given `Frame`.
+    ///
+    /// Returns `false` if no frame could be read, because of an EOF, or a corrupted file.
+    pub fn next_frame(&mut self, _frame: &mut Frame) -> Result<bool> {
+        // A block can contain many frames (with lacing).
+        // We first need to look if we are currently reading frames from a block (locations saved in self).
+        // If we have read all frames from the current block, we try to find the next block.
+        // When we find a cluster, we will try to read it's children up until we find a block group / simple block (which we will then parse).
+        //      -> Update cluster timestamp.
+        // When we find a block group, we will try to read all it's children up until a block (which we will parse right away).
+        //      -> Update reference block.
+        // When we found the next block with one frame, we read back to frame right away.
+        // When we found the next block with many frames, we read back the first frame right away and safe the other locations inside a buffer in self.
+
+        loop {
+            match next_element(&mut self.file) {
+                Ok((element_id, element_data)) => match element_id {
+                    // We enter cluster and block groups.
+                    ElementId::Cluster | ElementId::BlockGroup => {
+                        if let ElementData::Location { offset, .. } = element_data {
+                            let _ = self.file.seek(SeekFrom::Start(offset))?;
+                        } else {
+                            return Err(DemuxError::UnexpectedDataType);
+                        }
+                    }
+                    // Update the current cluster timestamp.
+                    ElementId::Timestamp => {
+                        if let ElementData::Unsigned(timestamp) = element_data {
+                            self.cluster_timestamp = timestamp;
+                        } else {
+                            return Err(DemuxError::UnexpectedDataType);
+                        }
+                    }
+                    // Parse the block data.
+                    ElementId::Block => {
+                        // TODO parse the block data (look for frames etc)
+                        if let ElementData::Location { offset, size } = element_data {
+                            let _ = self.file.seek(SeekFrom::Start(offset + size))?;
+                        }
+                        break;
+                    }
+                    // Parse the simple block data.
+                    ElementId::SimpleBlock => {
+                        // TODO parse the block data (look for frames etc)
+                        if let ElementData::Location { offset, size } = element_data {
+                            let _ = self.file.seek(SeekFrom::Start(offset + size))?;
+                        }
+                        break;
+                    }
+                    // We ignore all other elements.
+                    _ => {
+                        // We jump over unhandled master elements.
+                        if let ElementData::Location { offset, size } = element_data {
+                            if size == u64::MAX {
+                                return Ok(false);
+                            }
+                            let _ = self.file.seek(SeekFrom::Start(offset + size))?;
+                        }
+                    }
+                },
+                // If we encounter an error, we assume that there
+                // are no more blocks to handle (EOF or corrupted file).
+                Err(_) => return Ok(false),
+            }
+        }
+
+        Ok(true)
+    }
+
+    /// Seeks to the given timestamp. The next `next_frame()` will write the first frame that comes
+    /// directly AFTER the given timestamp. If timestamp is outside of the duration of the video,
+    /// the next `next_frame()` will return `None`.
+    ///
+    /// Seek operations will use `Cues` inside the file for faster seek operation. If no `Cues` were
+    /// present, this function will do a linear read through all clusters / blocks until the first
+    /// frame after the given timestamp is found.
+    pub fn seek(&mut self, timestamp: u64) -> Result<()> {
+        if let Some(cue_points) = self.cue_points.as_ref() {
+            let seek_pos = match cue_points.binary_search_by(|p| p.time.cmp(&timestamp)) {
+                Ok(seek_pos) => seek_pos,
+                Err(seek_pos) => seek_pos - 1,
+            };
+            if let Some(point) = cue_points.get(seek_pos) {
+                let _ = self
+                    .file
+                    .seek(SeekFrom::Start(point.track_position.cluster_position));
+            }
+        } else {
+            let cluster_start = self
+                .seek_head
+                .get(&ElementId::Cluster)
+                .ok_or(DemuxError::CantFindCluster)?;
+
+            let _ = self.file.seek(SeekFrom::Start(*cluster_start));
+
+            // TODO Loop over all clusters until we overshoot. Use the previous cluster then.
+        }
+
+        // TODO parse the cluster children and iterate over all block groups / simple blogs until
+        //      we found the first frame after the timestamp. Seek the reader to the start of that
+        //      block. Properly safe the current cluster timestamp and reset the old frame locations.
+        Ok(())
     }
 }
 
@@ -1561,7 +1665,6 @@ fn build_seek_head<R: Read + Seek>(
 /// Tries to find the offset of the first cluster and save it in the SeekHead.
 fn find_first_cluster_offset<R: Read + Seek>(
     r: &mut R,
-    segment_offset: u64,
     seek_head: &mut HashMap<ElementId, u64>,
 ) -> Result<()> {
     let (tracks_offset, tracks_size) = if let Some(offset) = seek_head.get(&ElementId::Tracks) {
@@ -1576,7 +1679,7 @@ fn find_first_cluster_offset<R: Read + Seek>(
             Ok((element_id, element_data)) => {
                 if let ElementId::Cluster = element_id {
                     if let ElementData::Location { offset, .. } = element_data {
-                        let _ = seek_head.insert(ElementId::Cluster, segment_offset + offset);
+                        let _ = seek_head.insert(ElementId::Cluster, offset);
                         break;
                     } else {
                         return Err(DemuxError::UnexpectedDataType);
@@ -1654,6 +1757,18 @@ where
         }
     }
     Ok(children)
+}
+
+fn seek_to_first_cluster<R: Read + Seek>(
+    r: &mut R,
+    seek_head: &HashMap<ElementId, u64>,
+) -> Result<()> {
+    if let Some(offset) = seek_head.get(&ElementId::Cluster) {
+        let _ = r.seek(SeekFrom::Start(*offset))?;
+        Ok(())
+    } else {
+        Err(DemuxError::ElementNotFound(ElementId::Cluster))
+    }
 }
 
 #[cfg(test)]
