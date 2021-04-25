@@ -30,7 +30,7 @@ pub fn parse_simple_mkv() {
     while mkv.next_frame(&mut frame).unwrap() {
         count += 1;
     }
-    assert_eq!(count, 31);
+    assert_eq!(count, 74);
 }
 
 #[test]
@@ -68,7 +68,11 @@ pub fn parse_hdr_mkv() {
     assert!((0.009999999776482582 - metadata.luminance_min().unwrap()).abs() < f64::EPSILON);
 
     let mut frame = Frame::default();
-    while mkv.next_frame(&mut frame).unwrap() {}
+    let mut count = 0;
+    while mkv.next_frame(&mut frame).unwrap() {
+        count += 1;
+    }
+    assert_eq!(count, 9);
 }
 
 #[test]
@@ -166,7 +170,7 @@ pub fn parse_test3_mkv() {
 #[test]
 pub fn parse_test4_mkv() {
     let file = File::open("tests/data/test4.mkv").unwrap();
-    let mkv = MatroskaFile::open(file).unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
 
     assert_eq!(mkv.ebml_header().version(), None);
     assert_eq!(mkv.ebml_header().read_version(), None);
@@ -183,6 +187,9 @@ pub fn parse_test4_mkv() {
     assert_eq!(mkv.info().date_utc().unwrap(), 304072935000000000);
 
     assert_eq!(mkv.tracks().len(), 2);
+
+    let mut frame = Frame::default();
+    while mkv.next_frame(&mut frame).unwrap() {}
 }
 
 #[test]

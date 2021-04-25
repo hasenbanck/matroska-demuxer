@@ -30,8 +30,10 @@ use element_id::ID_TO_ELEMENT_ID;
 pub use enums::*;
 pub use error::DemuxError;
 
+use crate::block::{parse_block_header, LacedFrame};
 use crate::ebml::{parse_child, try_find_bool};
 
+mod block;
 mod ebml;
 pub(crate) mod element_id;
 mod enums;
@@ -52,15 +54,15 @@ pub struct Frame {
     /// The data of the frame.
     pub data: Vec<u8>,
     /// Set when the codec should decode this frame but not display it.
-    pub invisible: bool,
+    pub is_invisible: bool,
     /// Block marked this frame as a keyframe.
     ///
     /// Only set for files that use simple blocks.
-    pub keyframe: Option<bool>,
+    pub is_keyframe: Option<bool>,
     /// Set when the frame can be discarded during playing if needed.
     ///
     /// Only set for files that use simple blocks.
-    pub discardable: Option<bool>,
+    pub is_discardable: Option<bool>,
 }
 
 /// The EBML header of the file.
@@ -1361,17 +1363,7 @@ pub struct MatroskaFile<R> {
     /// The timestamp of the current cluster.
     cluster_timestamp: u64,
     /// Queued frames of a block we are currently reading.
-    queued_frames: VecDeque<QueuedFrame>,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct QueuedFrame {
-    track: u64,
-    timestamp: u64,
-    size: u64,
-    invisible: bool,
-    keyframe: Option<bool>,
-    discardable: Option<bool>,
+    queued_frames: VecDeque<LacedFrame>,
 }
 
 impl<R: Read + Seek> MatroskaFile<R> {
@@ -1482,22 +1474,9 @@ impl<R: Read + Seek> MatroskaFile<R> {
     ///
     /// Returns `false` if we reached the end of the file and can't read any more frames.
     pub fn next_frame(&mut self, frame: &mut Frame) -> Result<bool> {
-        // Read a frame that is left inside the block.
-        if let Some(queued_frame) = self.queued_frames.pop_front() {
-            let size: usize = queued_frame.size.try_into()?;
-            if frame.data.len() < size {
-                frame.data.resize(size, 0_u8);
-            }
-
-            frame.timestamp = queued_frame.timestamp;
-            frame.track = queued_frame.track;
-            frame.discardable = queued_frame.discardable;
-            frame.invisible = queued_frame.invisible;
-            frame.keyframe = queued_frame.keyframe;
-            self.file.read_exact(&mut frame.data[0..size])?;
-
+        if self.try_pop_frame(frame)? {
             return Ok(true);
-        }
+        };
 
         // Search for the next block.
         loop {
@@ -1520,43 +1499,24 @@ impl<R: Read + Seek> MatroskaFile<R> {
                         }
                     }
                     // Parse the block data.
-                    ElementId::Block => {
+                    ElementId::SimpleBlock | ElementId::Block => {
                         if let ElementData::Location { offset, size } = element_data {
-                            // TODO Parse the block header and handle the lacing.
-                            // TODO Parse the first frame.
-                            // TODO Parse the locations of the other frames and save them.
-                            // TODO How to we calculate the timestamp for a laced frame? Is it always the block's timestamp? (Most of the time used for audio frames, were we might just queue it anyhow)
-                            // TODO Make sure that the current location inside the read is the next frame.
-                            let _ = self.file.seek(SeekFrom::Start(offset + size))?;
-                            break;
+                            let _ = self.file.seek(SeekFrom::Start(offset))?;
+                            parse_block_header(
+                                &mut self.file,
+                                &mut self.queued_frames,
+                                size,
+                                self.cluster_timestamp,
+                                element_id == ElementId::SimpleBlock,
+                            )?;
+                            let _ = self.try_pop_frame(frame)?;
+
+                            return Ok(true);
                         } else {
                             return Err(DemuxError::UnexpectedDataType);
                         }
                     }
-                    // Parse the simple block data.
-                    ElementId::SimpleBlock => {
-                        if let ElementData::Location { offset, size } = element_data {
-                            // TODO Parse the block header and handle the lacing.
-                            // TODO Parse the first frame.
-                            // TODO Parse the locations of the other frames and save them.
-                            // TODO How to we calculate the timestamp for a laced frame? Is it always the block's timestamp? (Most of the time used for audio frames, were we might just queue it anyhow)
-                            // TODO Make sure that the current location inside the read is the next frame.
-                            let _ = self.file.seek(SeekFrom::Start(offset + size))?;
-                            break;
-                        } else {
-                            return Err(DemuxError::UnexpectedDataType);
-                        }
-                    }
-                    // We ignore all other elements.
-                    _ => {
-                        // We jump over unhandled master elements.
-                        if let ElementData::Location { offset, size } = element_data {
-                            if size == u64::MAX {
-                                return Ok(false);
-                            }
-                            let _ = self.file.seek(SeekFrom::Start(offset + size))?;
-                        }
-                    }
+                    _ => { /* We ignore all other elements */ }
                 },
                 // If we encounter an IO error, we assume that there
                 // are no more blocks to handle (EOF).
@@ -1570,8 +1530,27 @@ impl<R: Read + Seek> MatroskaFile<R> {
                 }
             }
         }
+    }
 
-        Ok(true)
+    /// Read a frame that is left inside the block.
+    fn try_pop_frame(&mut self, frame: &mut Frame) -> Result<bool> {
+        if let Some(queued_frame) = self.queued_frames.pop_front() {
+            let size: usize = queued_frame.size.try_into()?;
+            if frame.data.len() < size {
+                frame.data.resize(size, 0_u8);
+            }
+
+            frame.timestamp = queued_frame.timestamp;
+            frame.track = queued_frame.track;
+            frame.is_discardable = queued_frame.is_discardable;
+            frame.is_invisible = queued_frame.is_invisible;
+            frame.is_keyframe = queued_frame.is_keyframe;
+            self.file.read_exact(&mut frame.data[0..size])?;
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     /// Seeks to the given timestamp. The next `next_frame()` will write the first frame that comes
@@ -1582,6 +1561,9 @@ impl<R: Read + Seek> MatroskaFile<R> {
     /// present, this function will do a linear read through all clusters / blocks until the first
     /// frame after the given timestamp is found.
     pub fn seek(&mut self, timestamp: u64) -> Result<()> {
+        self.cluster_timestamp = 0;
+        self.queued_frames.clear();
+
         if let Some(cue_points) = self.cue_points.as_ref() {
             let seek_pos = match cue_points.binary_search_by(|p| p.time.cmp(&timestamp)) {
                 Ok(seek_pos) => seek_pos,
@@ -1605,7 +1587,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
 
         // TODO parse the cluster children and iterate over all block groups / simple blogs until
         //      we found the first frame after the timestamp. Seek the reader to the start of that
-        //      block. Properly safe the current cluster timestamp and reset the old frame locations.
+        //      block.
         Ok(())
     }
 }
@@ -1676,7 +1658,7 @@ fn build_seek_head<R: Read + Seek>(
     loop {
         let position = r.stream_position()?;
         match next_element(r) {
-            Ok((element_id, element_data)) => {
+            Ok((element_id, _)) => {
                 if element_id == ElementId::Info
                     || element_id == ElementId::Tracks
                     || element_id == ElementId::Chapters
@@ -1690,14 +1672,6 @@ fn build_seek_head<R: Read + Seek>(
                     {
                         let _ = seek_head.insert(element_id, position);
                     }
-                }
-
-                if let ElementData::Location { offset, size } = element_data {
-                    if size == u64::MAX {
-                        // No path left to walk on this level.
-                        break;
-                    }
-                    let _ = r.seek(SeekFrom::Start(offset + size))?;
                 }
             }
             Err(_) => {
@@ -1734,12 +1708,11 @@ fn find_first_cluster_offset<R: Read + Seek>(
                     }
                 }
 
-                if let ElementData::Location { offset, size } = element_data {
+                if let ElementData::Location { size, .. } = element_data {
                     if size == u64::MAX {
                         // No path left to walk on this level.
                         return Err(DemuxError::CantFindCluster);
                     }
-                    let _ = r.seek(SeekFrom::Start(offset + size))?;
                 }
             }
             Err(_) => {

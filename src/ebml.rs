@@ -448,58 +448,81 @@ pub(crate) fn parse_element_header<R: Read + Seek>(
         let _ = r.seek(SeekFrom::Start(from))?;
     }
 
-    let id = parse_element_id(r)?;
+    let id = parse_variable_u32(r)?;
     let element_id = *ID_TO_ELEMENT_ID.get(&id).unwrap_or(&ElementId::Unknown);
 
-    let size = parse_data_size(r)?;
+    let size = parse_variable_u64(r)?;
     Ok((element_id, size))
 }
 
-/// Parses a variable length EBML Element ID.
-fn parse_element_id<R: Read>(r: &mut R) -> Result<u32> {
+/// Parses a variable length EBML u32 (as used for the Element ID).
+fn parse_variable_u32<R: Read>(r: &mut R) -> Result<u32> {
     loop {
         let mut bytes = [0u8];
         r.read_exact(&mut bytes)?;
         let element_id = match bytes[0] {
-            // We keep reading bytes until we find a valid Element ID.
+            // We keep reading bytes until we find a valid variable.
             byte if (byte & 0xF0) == 0x00 => continue,
             byte if (byte & 0x80) == 0x80 => byte.into(),
-            byte if (byte & 0xC0) == 0x40 => parse_id_value(r, byte, 1)?,
-            byte if (byte & 0xE0) == 0x20 => parse_id_value(r, byte, 2)?,
-            byte if (byte & 0xF0) == 0x10 => parse_id_value(r, byte, 3)?,
+            byte if (byte & 0xC0) == 0x40 => parse_variable_u32_data(r, byte, 1)?,
+            byte if (byte & 0xE0) == 0x20 => parse_variable_u32_data(r, byte, 2)?,
+            byte if (byte & 0xF0) == 0x10 => parse_variable_u32_data(r, byte, 3)?,
             _ => return Err(DemuxError::InvalidEbmlElementId),
         };
         return Ok(element_id);
     }
 }
 
-/// Parses a variable length EBML data size.
-fn parse_data_size<R: Read>(r: &mut R) -> Result<u64> {
+/// Parses a variable length EBML i64 as found in EBML laving frame sizes (as used in EBML frame lacing).
+pub(crate) fn parse_variable_i64<R: Read>(r: &mut R) -> Result<i64> {
+    loop {
+        let mut bytes = [0u8];
+        r.read_exact(&mut bytes)?;
+        let element_id = match bytes[0] {
+            byte if (byte & 0xF0) == 0x00 => continue,
+            byte if (byte & 0x80) == 0x80 => i64::from(0x7F & byte).saturating_sub(63),
+            byte if (byte & 0xC0) == 0x40 => {
+                i64::from(parse_variable_u32_data(r, 0x3F & byte, 1)?).saturating_sub(8191)
+            }
+            byte if (byte & 0xE0) == 0x20 => {
+                i64::from(parse_variable_u32_data(r, 0x1F & byte, 2)?).saturating_sub(1048575)
+            }
+            byte if (byte & 0xF0) == 0x10 => {
+                i64::from(parse_variable_u32_data(r, 0x0F & byte, 3)?).saturating_sub(134217727)
+            }
+            _ => return Err(DemuxError::InvalidEbmlElementId),
+        };
+        return Ok(element_id);
+    }
+}
+
+/// Parses a variable length EBML u64 (as used for the data size).
+pub(crate) fn parse_variable_u64<R: Read>(r: &mut R) -> Result<u64> {
     let mut bytes = [0u8];
     r.read_exact(&mut bytes)?;
     let size = match bytes[0] {
         byte if byte == 0xFF => u64::MAX,
         byte if (byte & 0x80) == 0x80 => (0x7F & byte).into(),
-        byte if (byte & 0xC0) == 0x40 => parse_size_value(r, 0x3F & byte, 1)?,
-        byte if (byte & 0xE0) == 0x20 => parse_size_value(r, 0x1F & byte, 2)?,
-        byte if (byte & 0xF0) == 0x10 => parse_size_value(r, 0x0F & byte, 3)?,
-        byte if (byte & 0xF8) == 0x08 => parse_size_value(r, 0x07 & byte, 4)?,
-        byte if (byte & 0xFC) == 0x04 => parse_size_value(r, 0x03 & byte, 5)?,
-        byte if (byte & 0xFE) == 0x02 => parse_size_value(r, 0x01 & byte, 6)?,
-        byte if byte == 0x01 => parse_size_value(r, 0, 7)?,
+        byte if (byte & 0xC0) == 0x40 => parse_variable_u64_data(r, 0x3F & byte, 1)?,
+        byte if (byte & 0xE0) == 0x20 => parse_variable_u64_data(r, 0x1F & byte, 2)?,
+        byte if (byte & 0xF0) == 0x10 => parse_variable_u64_data(r, 0x0F & byte, 3)?,
+        byte if (byte & 0xF8) == 0x08 => parse_variable_u64_data(r, 0x07 & byte, 4)?,
+        byte if (byte & 0xFC) == 0x04 => parse_variable_u64_data(r, 0x03 & byte, 5)?,
+        byte if (byte & 0xFE) == 0x02 => parse_variable_u64_data(r, 0x01 & byte, 6)?,
+        byte if byte == 0x01 => parse_variable_u64_data(r, 0, 7)?,
         _ => return Err(DemuxError::InvalidEbmlDataSize),
     };
     Ok(size)
 }
 
-fn parse_id_value<R: Read>(r: &mut R, byte: u8, left: u8) -> Result<u32> {
+fn parse_variable_u32_data<R: Read>(r: &mut R, byte: u8, left: u8) -> Result<u32> {
     let shift: usize = (8 * (3 - left)).into();
     let mut bytes = [byte, 0, 0, 0];
     r.read_exact(&mut bytes[1..=left.into()])?;
     Ok(u32::from_be_bytes(bytes) >> shift)
 }
 
-fn parse_size_value<R: Read>(r: &mut R, byte: u8, left: u8) -> Result<u64> {
+fn parse_variable_u64_data<R: Read>(r: &mut R, byte: u8, left: u8) -> Result<u64> {
     let shift: usize = (8 * (7 - left)).into();
     let mut bytes = [byte, 0, 0, 0, 0, 0, 0, 0];
     r.read_exact(&mut bytes[1..=left.into()])?;
