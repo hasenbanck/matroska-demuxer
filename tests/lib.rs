@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::num::NonZeroU64;
 
-use matroska_demux::{
+use matroska_demuxer::{
     ContentEncodingType, Frame, MatrixCoefficients, MatroskaFile, Primaries, TrackEntry, TrackType,
     TransferCharacteristics,
 };

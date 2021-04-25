@@ -1362,7 +1362,7 @@ impl<R: Read + Seek> ParsableElement<R> for CueTrackPositions {
 
 /// Demuxer for Matroska files.
 #[derive(Clone, Debug)]
-pub struct MatroskaFile<R> {
+pub struct MatroskaFile<R: Read + Seek> {
     file: R,
     ebml_header: EbmlHeader,
     seek_head: HashMap<ElementId, u64>,
@@ -1473,8 +1473,8 @@ impl<R: Read + Seek> MatroskaFile<R> {
         }
     }
 
-    /// Element containing metadata describing Tracks, Editions,
-    /// Chapters, Attachments, or the Segment as a whole.
+    /// Element containing metadata describing tracks, editions,
+    /// chapters, attachments, or the segment as a whole.
     pub fn tags(&self) -> Option<&[Tag]> {
         match self.tags.as_ref() {
             None => None,
