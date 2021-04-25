@@ -1,7 +1,7 @@
-# matroska-demux
+# matroska-demuxer
 
-[![Latest version](https://img.shields.io/crates/v/matroska-demux.svg)](https://crates.io/crates/matroska-demux)
-[![Documentation](https://docs.rs/matroska-demux/badge.svg)](https://docs.rs/matroska-demux)
+[![Latest version](https://img.shields.io/crates/v/matroska-demuxer.svg)](https://crates.io/crates/matroska-demuxer)
+[![Documentation](https://docs.rs/matroska-demuxer/badge.svg)](https://docs.rs/matroska-demuxer)
 ![ZLIB](https://img.shields.io/badge/license-zlib-blue.svg)
 ![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Apache](https://img.shields.io/badge/license-Apache-blue.svg)
