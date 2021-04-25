@@ -9,7 +9,19 @@
 //! ```ignore
 //! let file = File::open("test.mkv").unwrap();
 //! let mkv = MatroskaFile::open(file).unwrap();
-//! assert!(mkv.tracks().len() >= 1);
+//! let video_track = mkv
+//!     .tracks()
+//!     .iter()
+//!     .find(|t| t.track_type() == TrackType::Video)
+//!     .map(|t| t.track_number().get())
+//!     .unwrap();
+//!
+//! let mut frame = Frame::default();
+//! while mkv.next_frame(&mut frame).unwrap() {
+//!     if frame.track == video_track {
+//!         dbg!("video frame found");
+//!     }
+//! }
 //! ```
 
 use std::collections::{HashMap, VecDeque};
