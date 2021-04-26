@@ -36,27 +36,29 @@ pub(crate) struct LacedFrame {
     pub(crate) is_discardable: Option<bool>,
 }
 
-pub(crate) fn parse_block_header<R: Read + Seek>(
+pub(crate) fn probe_block_timestamp<R: Read + Seek>(
+    r: &mut R,
+    cluster_timestamp: u64,
+) -> Result<u64> {
+    let _ = parse_variable_u64(r)?;
+    let timestamp = parse_timestamp(r, cluster_timestamp)?;
+
+    Ok(timestamp)
+}
+
+pub(crate) fn parse_laced_frames<R: Read + Seek>(
     r: &mut R,
     frames: &mut VecDeque<LacedFrame>,
     block_size: u64,
     cluster_timestamp: u64,
+    header_start: u64,
     is_simple_block: bool,
 ) -> Result<()> {
-    let header_start = r.stream_position()?;
-
     let track = parse_variable_u64(r)?;
-    let timestamp = parse_i16(r)?;
+    let timestamp = parse_timestamp(r, cluster_timestamp)?;
 
     let mut header_byte = [0_u8];
     r.read_exact(&mut header_byte)?;
-
-    let abs: u64 = timestamp.abs().try_into()?;
-    let timestamp = if timestamp.is_positive() {
-        cluster_timestamp.add(abs)
-    } else {
-        cluster_timestamp.saturating_sub(abs)
-    };
 
     let is_keyframe = if is_simple_block {
         let is_keyframe: bool = ((header_byte[0] & 0x80) >> 7) == 1;
@@ -226,6 +228,19 @@ pub(crate) fn parse_block_header<R: Read + Seek>(
     }
 
     Ok(())
+}
+
+fn parse_timestamp<R: Read + Seek>(r: &mut R, cluster_timestamp: u64) -> Result<u64> {
+    let timestamp = parse_i16(r)?;
+
+    let abs: u64 = timestamp.abs().try_into()?;
+    let timestamp = if timestamp.is_positive() {
+        cluster_timestamp.add(abs)
+    } else {
+        cluster_timestamp.saturating_sub(abs)
+    };
+
+    Ok(timestamp)
 }
 
 fn parse_xiph_frame_size<R: Read + Seek>(r: &mut R) -> Result<u64> {

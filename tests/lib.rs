@@ -26,11 +26,23 @@ pub fn parse_simple_mkv() {
     assert_eq!(tags[0].simple_tags()[0].string().unwrap(), "Lavf58.76.100");
 
     let mut frame = Frame::default();
+
     let mut count = 0;
     while mkv.next_frame(&mut frame).unwrap() {
         count += 1;
     }
     assert_eq!(count, 74);
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 0);
+
+    mkv.seek(3).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 3);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
 }
 
 #[test]
@@ -73,6 +85,17 @@ pub fn parse_hdr_mkv() {
         count += 1;
     }
     assert_eq!(count, 9);
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 0);
+
+    mkv.seek(45).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 45);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
 }
 
 #[test]
@@ -104,12 +127,23 @@ pub fn parse_test1_mkv() {
 
     let mut frame = Frame::default();
     while mkv.next_frame(&mut frame).unwrap() {}
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 0);
+
+    mkv.seek(180).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 192);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
 }
 
 #[test]
 pub fn parse_test2_mkv() {
     let file = File::open("tests/data/test2.mkv").unwrap();
-    let mkv = MatroskaFile::open(file).unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
 
     assert_eq!(mkv.ebml_header().version(), None);
     assert_eq!(mkv.ebml_header().read_version(), None);
@@ -127,6 +161,21 @@ pub fn parse_test2_mkv() {
     assert_eq!(mkv.info().date_utc().unwrap(), 328711520000000000);
 
     assert_eq!(mkv.tracks().len(), 2);
+
+    let mut frame = Frame::default();
+    while mkv.next_frame(&mut frame).unwrap() {}
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 0);
+
+    // Timescale is "100000"
+    mkv.seek(1800).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 3410);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
 }
 
 #[test]
@@ -165,6 +214,17 @@ pub fn parse_test3_mkv() {
 
     let mut frame = Frame::default();
     while mkv.next_frame(&mut frame).unwrap() {}
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 8);
+
+    mkv.seek(450).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 500);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
 }
 
 #[test]
@@ -190,6 +250,18 @@ pub fn parse_test4_mkv() {
 
     let mut frame = Frame::default();
     while mkv.next_frame(&mut frame).unwrap() {}
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    // We are seeking in a file based of a live stream. So the first timestamp is "12345".
+    assert_eq!(frame.timestamp, 12345);
+
+    mkv.seek(50000).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 50011);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
 }
 
 #[test]
@@ -252,6 +324,17 @@ pub fn parse_test5_mkv() {
 
     let mut frame = Frame::default();
     while mkv.next_frame(&mut frame).unwrap() {}
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 0);
+
+    mkv.seek(2000).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 2000);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
 }
 
 #[test]
@@ -273,6 +356,17 @@ pub fn parse_test6_mkv() {
 
     let mut frame = Frame::default();
     while mkv.next_frame(&mut frame).unwrap() {}
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 0);
+
+    mkv.seek(1000).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 1000);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
 }
 
 #[test]
@@ -299,6 +393,17 @@ pub fn parse_test7_mkv() {
 
     let mut frame = Frame::default();
     while mkv.next_frame(&mut frame).unwrap() {}
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 8);
+
+    mkv.seek(2000).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 2000);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
 }
 
 #[test]
@@ -325,4 +430,15 @@ pub fn parse_test8_mkv() {
 
     let mut frame = Frame::default();
     while mkv.next_frame(&mut frame).unwrap() {}
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 3);
+
+    mkv.seek(750).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 750);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
 }
