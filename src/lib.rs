@@ -1,6 +1,5 @@
 #![warn(missing_docs)]
 #![deny(unsafe_code)]
-#![deny(unused_results)]
 #![deny(clippy::as_conversions)]
 #![deny(clippy::panic)]
 #![deny(clippy::unwrap_used)]
@@ -1513,7 +1512,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
                             size: block_size,
                         } = element_data
                         {
-                            let _ = self.file.seek(SeekFrom::Start(header_start))?;
+                            self.file.seek(SeekFrom::Start(header_start))?;
 
                             parse_laced_frames(
                                 &mut self.file,
@@ -1523,7 +1522,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
                                 header_start,
                                 element_id == ElementId::SimpleBlock,
                             )?;
-                            let _ = self.try_pop_frame(frame)?;
+                            self.try_pop_frame(frame)?;
 
                             Ok(true)
                         } else {
@@ -1585,14 +1584,14 @@ impl<R: Read + Seek> MatroskaFile<R> {
 
         let target_offset = self.seek_broad_phase(seek_timestamp, cluster_start)?;
 
-        let _ = self.file.seek(SeekFrom::Start(target_offset));
+        self.file.seek(SeekFrom::Start(target_offset))?;
 
         self.seek_narrow_phase(seek_timestamp)
     }
 
     fn enter_data_location(&mut self, element_data: &ElementData) -> Result<()> {
         if let ElementData::Location { offset, .. } = element_data {
-            let _ = self.file.seek(SeekFrom::Start(*offset))?;
+            self.file.seek(SeekFrom::Start(*offset))?;
             Ok(())
         } else {
             Err(DemuxError::UnexpectedDataType)
@@ -1628,7 +1627,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
         let mut current_cluster_offset = 0;
         let mut next_cluster_offset = 0;
 
-        let _ = self.file.seek(SeekFrom::Start(cluster_start));
+        self.file.seek(SeekFrom::Start(cluster_start))?;
 
         loop {
             match next_element(&mut self.file) {
@@ -1640,7 +1639,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
                             if size == u64::MAX {
                                 return Ok(cluster_start);
                             }
-                            let _ = self.file.seek(SeekFrom::Start(offset))?;
+                            self.file.seek(SeekFrom::Start(offset))?;
                             last_cluster_offset = current_cluster_offset;
                             current_cluster_offset = offset;
                             next_cluster_offset = offset + size;
@@ -1653,7 +1652,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
                         if let ElementData::Unsigned(timestamp) = element_data {
                             match timestamp {
                                 t if t < seek_timestamp => {
-                                    let _ = self.file.seek(SeekFrom::Start(next_cluster_offset))?;
+                                    self.file.seek(SeekFrom::Start(next_cluster_offset))?;
                                 }
                                 t if t > seek_timestamp => {
                                     return Ok(last_cluster_offset);
@@ -1702,18 +1701,18 @@ impl<R: Read + Seek> MatroskaFile<R> {
                     // Parse the block data.
                     ElementId::SimpleBlock | ElementId::Block => {
                         if let ElementData::Location { offset, size } = element_data {
-                            let _ = self.file.seek(SeekFrom::Start(offset))?;
+                            self.file.seek(SeekFrom::Start(offset))?;
                             let timestamp =
                                 probe_block_timestamp(&mut self.file, self.cluster_timestamp)?;
 
                             match timestamp {
                                 t if t < seek_timestamp => {
                                     // Jump to the next element.
-                                    let _ = self.file.seek(SeekFrom::Start(offset + size))?;
+                                    self.file.seek(SeekFrom::Start(offset + size))?;
                                 }
                                 _ => {
                                     // We found the first element after the seeked timestamp.
-                                    let _ = self.file.seek(SeekFrom::Start(position))?;
+                                    self.file.seek(SeekFrom::Start(position))?;
                                     return Ok(());
                                 }
                             }
@@ -1791,8 +1790,7 @@ fn parse_seek_head<R: Read + Seek>(
                 if let ElementData::Location { offset, size } = entry_data {
                     let seek_fields = collect_children(&mut file, *offset, *size)?;
                     if let Ok(seek_entry) = SeekEntry::new(&mut file, &seek_fields) {
-                        let _ = seek_head
-                            .insert(seek_entry.id, segment_data_offset + seek_entry.offset);
+                        seek_head.insert(seek_entry.id, segment_data_offset + seek_entry.offset);
                     }
                 }
             }
@@ -1828,7 +1826,7 @@ fn build_seek_head<R: Read + Seek>(
     segment_data_offset: u64,
     seek_head: &mut HashMap<ElementId, u64>,
 ) -> Result<()> {
-    let _ = r.seek(SeekFrom::Start(segment_data_offset))?;
+    r.seek(SeekFrom::Start(segment_data_offset))?;
     loop {
         let position = r.stream_position()?;
         match next_element(r) {
@@ -1844,7 +1842,7 @@ fn build_seek_head<R: Read + Seek>(
                     if element_id != ElementId::Cluster
                         || !seek_head.contains_key(&ElementId::Cluster)
                     {
-                        let _ = seek_head.insert(element_id, position);
+                        seek_head.insert(element_id, position);
                     }
                 }
             }
@@ -1869,7 +1867,7 @@ fn find_first_cluster_offset<R: Read + Seek>(
         return Err(DemuxError::CantFindCluster);
     };
 
-    let _ = r.seek(SeekFrom::Start(tracks_offset + tracks_size))?;
+    r.seek(SeekFrom::Start(tracks_offset + tracks_size))?;
     loop {
         let position = r.stream_position()?;
 
@@ -1877,7 +1875,7 @@ fn find_first_cluster_offset<R: Read + Seek>(
             Ok((element_id, element_data)) => {
                 if let ElementId::Cluster = element_id {
                     if let ElementData::Location { .. } = element_data {
-                        let _ = seek_head.insert(ElementId::Cluster, position);
+                        seek_head.insert(ElementId::Cluster, position);
                         break;
                     } else {
                         return Err(DemuxError::UnexpectedDataType);
@@ -1961,7 +1959,7 @@ fn seek_to_first_cluster<R: Read + Seek>(
     seek_head: &HashMap<ElementId, u64>,
 ) -> Result<()> {
     if let Some(offset) = seek_head.get(&ElementId::Cluster) {
-        let _ = r.seek(SeekFrom::Start(*offset))?;
+        r.seek(SeekFrom::Start(*offset))?;
         Ok(())
     } else {
         Err(DemuxError::ElementNotFound(ElementId::Cluster))

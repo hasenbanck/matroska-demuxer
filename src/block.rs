@@ -40,7 +40,7 @@ pub(crate) fn probe_block_timestamp<R: Read + Seek>(
     r: &mut R,
     cluster_timestamp: u64,
 ) -> Result<u64> {
-    let _ = parse_variable_u64(r)?;
+    parse_variable_u64(r)?;
     let timestamp = parse_timestamp(r, cluster_timestamp)?;
 
     Ok(timestamp)

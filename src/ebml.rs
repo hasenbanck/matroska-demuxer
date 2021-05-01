@@ -53,7 +53,7 @@ pub(crate) fn collect_children<R: Read + Seek>(
     size: u64,
 ) -> Result<Vec<(ElementId, ElementData)>> {
     let mut children = Vec::with_capacity(16);
-    let _ = r.seek(SeekFrom::Start(offset))?;
+    r.seek(SeekFrom::Start(offset))?;
     let end = offset + size;
 
     while r.stream_position()? < end {
@@ -63,7 +63,7 @@ pub(crate) fn collect_children<R: Read + Seek>(
             if size == u64::MAX {
                 break;
             }
-            let _ = r.seek(SeekFrom::Start(offset + size))?;
+            r.seek(SeekFrom::Start(offset + size))?;
         }
 
         if element_id != ElementId::Unknown {
@@ -375,7 +375,7 @@ pub(crate) fn try_find_binary<R: Read + Seek>(
         if let ElementData::Location { offset: _, size } = data {
             let size = usize::try_from(*size)?;
             let mut data = vec![0_u8; size];
-            let _ = r.read_exact(&mut data)?;
+            r.read_exact(&mut data)?;
             Ok(Some(data))
         } else {
             Err(DemuxError::UnexpectedDataType)
@@ -445,7 +445,7 @@ pub(crate) fn parse_element_header<R: Read + Seek>(
     from: Option<u64>,
 ) -> Result<(ElementId, u64)> {
     if let Some(from) = from {
-        let _ = r.seek(SeekFrom::Start(from))?;
+        r.seek(SeekFrom::Start(from))?;
     }
 
     let id = parse_variable_u32(r)?;
@@ -533,7 +533,7 @@ fn parse_location<R: Read + Seek>(r: &mut R, size: u64) -> Result<(u64, u64)> {
     let offset = r.stream_position()?;
     // We skip the data and set the reader to the next element, if the size is known.
     if size != u64::MAX {
-        let _ = r.seek(SeekFrom::Start(offset + size))?;
+        r.seek(SeekFrom::Start(offset + size))?;
     }
     Ok((offset, size))
 }
