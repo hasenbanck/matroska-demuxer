@@ -850,22 +850,22 @@ impl MasteringMetadata {
 
     /// Blue X chromaticity coordinate, as defined by CIE 1931.
     pub fn primary_b_chromaticity_x(&self) -> Option<f64> {
-        self.primary_g_chromaticity_x
+        self.primary_b_chromaticity_x
     }
 
     /// Blue Y chromaticity coordinate, as defined by CIE 1931.
     pub fn primary_b_chromaticity_y(&self) -> Option<f64> {
-        self.primary_g_chromaticity_y
+        self.primary_b_chromaticity_y
     }
 
     /// White X chromaticity coordinate, as defined by CIE 1931.
     pub fn white_point_chromaticity_x(&self) -> Option<f64> {
-        self.primary_g_chromaticity_x
+        self.white_point_chromaticity_x
     }
 
     /// White Y chromaticity coordinate, as defined by CIE 1931.
     pub fn white_point_chromaticity_y(&self) -> Option<f64> {
-        self.primary_g_chromaticity_y
+        self.white_point_chromaticity_y
     }
 
     /// Maximum luminance. Represented in candelas per square meter (cd/m^2^).
@@ -1203,7 +1203,7 @@ impl Tag {
 #[derive(Clone, Debug)]
 pub struct Targets {
     target_type_value: Option<u64>,
-    target_type: Option<String>,
+    _target_type: Option<String>,
     tag_track_uid: Option<u64>,
 }
 
@@ -1217,7 +1217,7 @@ impl<R: Read + Seek> ParsableElement<R> for Targets {
 
         Ok(Self {
             target_type_value,
-            target_type,
+            _target_type: target_type,
             tag_track_uid,
         })
     }
@@ -1346,11 +1346,11 @@ impl<R: Read + Seek> ParsableElement<R> for CuePoint {
 /// Contain positions for different tracks corresponding to the timestamp.
 #[derive(Clone, Debug)]
 struct CueTrackPositions {
-    track: u64,
+    _track: u64,
     cluster_position: u64,
     relative_position: Option<u64>,
-    duration: Option<u64>,
-    block_number: Option<u64>,
+    _duration: Option<u64>,
+    _block_number: Option<u64>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for CueTrackPositions {
@@ -1364,11 +1364,11 @@ impl<R: Read + Seek> ParsableElement<R> for CueTrackPositions {
         let block_number = try_find_unsigned(fields, ElementId::CueBlockNumber)?;
 
         Ok(Self {
-            track,
+            _track: track,
             cluster_position,
             relative_position,
-            duration,
-            block_number,
+            _duration: duration,
+            _block_number: block_number,
         })
     }
 }
