@@ -155,7 +155,6 @@ pub enum ElementId {
     TagBinary,
 }
 
-#[allow(unused_results)]
 pub(crate) static ELEMENT_ID_TO_TYPE: Lazy<HashMap<ElementId, ElementType>> = Lazy::new(|| {
     let mut m = HashMap::with_capacity(144);
     m.insert(ElementId::Ebml, ElementType::Master);
@@ -306,7 +305,6 @@ pub(crate) static ELEMENT_ID_TO_TYPE: Lazy<HashMap<ElementId, ElementType>> = La
     m
 });
 
-#[allow(unused_results)]
 pub(crate) static ID_TO_ELEMENT_ID: Lazy<HashMap<u32, ElementId>> = Lazy::new(|| {
     let mut m = HashMap::with_capacity(144);
     m.insert(0x1A45DFA3, ElementId::Ebml);
