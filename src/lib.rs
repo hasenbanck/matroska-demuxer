@@ -77,6 +77,15 @@ pub struct Frame {
     pub is_discardable: Option<bool>,
 }
 
+impl From<Vec<u8>> for Frame {
+    fn from(data: Vec<u8>) -> Self {
+        Self {
+            data,
+            ..Frame::default()
+        }
+    }
+}
+
 /// The EBML header of the file.
 #[derive(Clone, Debug)]
 pub struct EbmlHeader {

@@ -1,6 +1,6 @@
 [package]
 name = "matroska-demuxer"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Nils Hasenbanck <nils@hasenbanck.de>"]
 description = "A demuxer that can demux Matroska and WebM container files."
 license = "Zlib OR MIT OR Apache-2.0"
