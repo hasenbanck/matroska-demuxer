@@ -24,11 +24,13 @@
 //! }
 //! ```
 
-use std::collections::{HashMap, VecDeque};
-use std::convert::TryInto;
-use std::error::Error;
-use std::io::{Read, Seek, SeekFrom};
-use std::num::NonZeroU64;
+use std::{
+    collections::{HashMap, VecDeque},
+    convert::TryInto,
+    error::Error,
+    io::{Read, Seek, SeekFrom},
+    num::NonZeroU64,
+};
 
 use ebml::{
     collect_children, expect_master, find_bool_or, find_custom_type, find_float_or, find_nonzero,
@@ -42,8 +44,10 @@ use element_id::ID_TO_ELEMENT_ID;
 pub use enums::*;
 pub use error::DemuxError;
 
-use crate::block::{parse_laced_frames, probe_block_timestamp, LacedFrame};
-use crate::ebml::{parse_child, try_find_bool};
+use crate::{
+    block::{parse_laced_frames, probe_block_timestamp, LacedFrame},
+    ebml::{parse_child, try_find_bool},
+};
 
 mod block;
 mod ebml;

@@ -1,11 +1,15 @@
 //! Parses blocks inside a Matroska file.
-use std::collections::VecDeque;
-use std::convert::{TryFrom, TryInto};
-use std::io::{Read, Seek};
-use std::ops::Add;
+use std::{
+    collections::VecDeque,
+    convert::{TryFrom, TryInto},
+    io::{Read, Seek},
+    ops::Add,
+};
 
-use crate::ebml::{parse_variable_i64, parse_variable_u64};
-use crate::Result;
+use crate::{
+    ebml::{parse_variable_i64, parse_variable_u64},
+    Result,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Lacing {

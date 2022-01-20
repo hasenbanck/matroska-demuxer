@@ -1,11 +1,15 @@
 //! Implement the parsing of EBML coded files.
 
-use std::convert::{TryFrom, TryInto};
-use std::io::{Read, Seek, SeekFrom};
-use std::num::NonZeroU64;
+use std::{
+    convert::{TryFrom, TryInto},
+    io::{Read, Seek, SeekFrom},
+    num::NonZeroU64,
+};
 
-use crate::element_id::{ElementId, ElementType, ELEMENT_ID_TO_TYPE, ID_TO_ELEMENT_ID};
-use crate::{DemuxError, Result};
+use crate::{
+    element_id::{ElementId, ElementType, ELEMENT_ID_TO_TYPE, ID_TO_ELEMENT_ID},
+    DemuxError, Result,
+};
 
 /// The data an element can contain.
 #[derive(Clone, Debug, PartialEq)]
