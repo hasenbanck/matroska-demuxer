@@ -139,8 +139,8 @@ impl From<std::num::TryFromIntError> for DemuxError {
     }
 }
 
-impl std::error::Error for DemuxError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl Error for DemuxError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         match *self {
             DemuxError::IoError(ref e) => Some(e),
             DemuxError::FromUtf8Error(ref e) => Some(e),
