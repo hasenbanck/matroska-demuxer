@@ -376,9 +376,10 @@ pub(crate) fn try_find_binary<R: Read + Seek>(
     element_id: ElementId,
 ) -> Result<Option<Vec<u8>>> {
     if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
-        if let ElementData::Location { offset: _, size } = data {
+        if let ElementData::Location { offset, size } = data {
             let size = usize::try_from(*size)?;
             let mut data = vec![0_u8; size];
+            r.seek(SeekFrom::Start(*offset))?;
             r.read_exact(&mut data)?;
             Ok(Some(data))
         } else {
