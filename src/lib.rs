@@ -1561,17 +1561,15 @@ impl<R: Read + Seek> MatroskaFile<R> {
     /// Read a frame that is left inside the block.
     fn try_pop_frame(&mut self, frame: &mut Frame) -> Result<bool> {
         if let Some(queued_frame) = self.queued_frames.pop_front() {
-            let size: usize = queued_frame.size.try_into()?;
-            if frame.data.len() < size {
-                frame.data.resize(size, 0_u8);
-            }
-
             frame.timestamp = queued_frame.timestamp;
             frame.track = queued_frame.track;
             frame.is_discardable = queued_frame.is_discardable;
             frame.is_invisible = queued_frame.is_invisible;
             frame.is_keyframe = queued_frame.is_keyframe;
-            self.file.read_exact(&mut frame.data[0..size])?;
+
+            let size: usize = queued_frame.size.try_into()?;
+            frame.data.resize(size, 0_u8);
+            self.file.read_exact(frame.data.as_mut_slice())?;
 
             Ok(true)
         } else {
