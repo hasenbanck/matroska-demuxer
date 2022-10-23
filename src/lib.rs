@@ -6,9 +6,12 @@
 //! A demuxer that can demux Matroska and WebM container files.
 //!
 //! # Example:
-//! ```ignore
+//! ```no_run
+//! use std::fs::File;
+//! use matroska_demuxer::*;
+//!
 //! let file = File::open("test.mkv").unwrap();
-//! let mkv = MatroskaFile::open(file).unwrap();
+//! let mut mkv = MatroskaFile::open(file).unwrap();
 //! let video_track = mkv
 //!     .tracks()
 //!     .iter()
