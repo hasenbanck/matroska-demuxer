@@ -117,7 +117,10 @@ impl<R: Read + Seek> ParsableElement<R> for EbmlHeader {
         let doc_type_version = find_unsigned(fields, ElementId::DocTypeVersion)?;
         let doc_type_read_version = find_unsigned(fields, ElementId::DocTypeReadVersion)?;
 
-        if doc_type != "matroska" && doc_type != "webm" {
+        // The spec allows Null-terminated strings.
+        let trimmed_doc_type = doc_type.trim_end_matches('\0');
+
+        if trimmed_doc_type != "matroska" && trimmed_doc_type != "webm" {
             return Err(DemuxError::InvalidEbmlHeader(format!(
                 "unsupported DocType: {}",
                 doc_type
