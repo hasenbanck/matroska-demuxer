@@ -6,8 +6,9 @@ use std::{
     num::NonZeroU64,
 };
 
+use crate::element_id::{element_id_to_type, id_to_element_id};
 use crate::{
-    element_id::{ElementId, ElementType, ELEMENT_ID_TO_TYPE, ID_TO_ELEMENT_ID},
+    element_id::{ElementId, ElementType},
     DemuxError, Result,
 };
 
@@ -410,11 +411,7 @@ pub(crate) fn try_find_date(
 pub(crate) fn next_element<R: Read + Seek>(r: &mut R) -> Result<(ElementId, ElementData)> {
     let (element_id, size) = parse_element_header(r, None)?;
 
-    let element_type = *ELEMENT_ID_TO_TYPE
-        .get(&element_id)
-        .unwrap_or(&ElementType::Unknown);
-
-    let element_data = match element_type {
+    let element_data = match element_id_to_type(element_id) {
         ElementType::Master | ElementType::Binary | ElementType::Unknown => {
             let (offset, size) = parse_location(r, size)?;
             ElementData::Location { offset, size }
@@ -454,7 +451,7 @@ pub(crate) fn parse_element_header<R: Read + Seek>(
     }
 
     let id = parse_variable_u32(r)?;
-    let element_id = *ID_TO_ELEMENT_ID.get(&id).unwrap_or(&ElementId::Unknown);
+    let element_id = id_to_element_id(id);
 
     let size = parse_variable_u64(r)?;
     Ok((element_id, size))

@@ -9,6 +9,5 @@ repository = "https://github.com/hasenbanck/matroska-demuxer"
 categories = ["multimedia"]
 keywords = ["matroska", "webm", "demuxer", "demux"]
 edition = "2021"
+rust-version = "1.70"
 
-[dependencies]
-once_cell = "1.12"

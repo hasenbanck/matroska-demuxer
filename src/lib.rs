@@ -1,8 +1,8 @@
 #![warn(missing_docs)]
-#![deny(unsafe_code)]
 #![deny(clippy::as_conversions)]
 #![deny(clippy::panic)]
-#![deny(clippy::unwrap_used)]
+#![forbid(unsafe_code)]
+#![forbid(clippy::unwrap_used)]
 //! A demuxer that can demux Matroska and WebM container files.
 //!
 //! # Example:
@@ -43,10 +43,10 @@ use ebml::{
     try_find_unsigned, try_parse_child, try_parse_children, ElementData, ParsableElement,
 };
 pub use element_id::ElementId;
-use element_id::ID_TO_ELEMENT_ID;
 pub use enums::*;
 pub use error::DemuxError;
 
+use crate::element_id::id_to_element_id;
 use crate::{
     block::{parse_laced_frames, probe_block_timestamp, LacedFrame},
     ebml::{parse_child, try_find_bool},
@@ -1317,7 +1317,7 @@ impl<R: Read + Seek> ParsableElement<R> for SeekEntry {
 
     fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let id: u32 = find_unsigned(fields, ElementId::SeekId)?.try_into()?;
-        let id = *ID_TO_ELEMENT_ID.get(&id).unwrap_or(&ElementId::Unknown);
+        let id = id_to_element_id(id);
         let offset = find_unsigned(fields, ElementId::SeekPosition)?;
 
         Ok(Self { id, offset })
