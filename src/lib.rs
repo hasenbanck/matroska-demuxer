@@ -1794,11 +1794,11 @@ fn parse_ebml_header<R: Read + Seek>(r: &mut R) -> Result<EbmlHeader> {
 fn parse_seek_head<R: Read + Seek>(
     mut file: &mut R,
     segment_data_offset: u64,
-    optional_seek_head: Option<(u64, u64)>,
+    mut optional_seek_head: Option<(u64, u64)>,
 ) -> Result<HashMap<ElementId, u64>> {
     let mut seek_head = HashMap::new();
 
-    if let Some((seek_head_data_offset, seek_head_data_size)) = optional_seek_head {
+    while let Some((seek_head_data_offset, seek_head_data_size)) = optional_seek_head.take() {
         let seek_head_entries =
             collect_children(&mut file, seek_head_data_offset, seek_head_data_size)?;
 
@@ -1807,7 +1807,28 @@ fn parse_seek_head<R: Read + Seek>(
                 if let ElementData::Location { offset, size } = entry_data {
                     let seek_fields = collect_children(&mut file, *offset, *size)?;
                     if let Ok(seek_entry) = SeekEntry::new(&mut file, &seek_fields) {
-                        seek_head.insert(seek_entry.id, segment_data_offset + seek_entry.offset);
+                        if seek_entry.id == ElementId::SeekHead {
+                            file.seek(SeekFrom::Start(segment_data_offset + seek_entry.offset))?;
+                            let (element_id, element_data) = next_element(file)?;
+
+                            // Check that a SeekHead element has been found as desired
+                            if element_id != ElementId::SeekHead {
+                                return Err(DemuxError::UnexpectedElement((
+                                    ElementId::SeekHead,
+                                    element_id,
+                                )));
+                            }
+
+                            if let ElementData::Location { offset, size } = element_data {
+                                // Push next SeekHead Element for use in next loop.
+                                optional_seek_head.replace((offset, size)).ok_or(()).expect_err("It is expected to have only one reference to a SeekHead in a SeekHead element");
+                            } else {
+                                return Err(DemuxError::CantFindCluster);
+                            }
+                        } else {
+                            seek_head
+                                .insert(seek_entry.id, segment_data_offset + seek_entry.offset);
+                        }
                     }
                 }
             }
