@@ -158,36 +158,43 @@ impl<R: Read + Seek> ParsableElement<R> for EbmlHeader {
 
 impl EbmlHeader {
     /// The EBML version used to create the file.
+    #[must_use]
     pub const fn version(&self) -> Option<u64> {
         self.version
     }
 
     /// The minimum EBML version a parser has to support to read this file.
+    #[must_use]
     pub const fn read_version(&self) -> Option<u64> {
         self.read_version
     }
 
     /// The maximum length of the IDs you'll find in this file (4 or less in Matroska).
+    #[must_use]
     pub const fn max_id_length(&self) -> u64 {
         self.max_id_length
     }
 
     /// The maximum length of the sizes you'll find in this file (8 or less in Matroska).
+    #[must_use]
     pub const fn max_size_length(&self) -> u64 {
         self.max_size_length
     }
 
     /// A string that describes the type of document that follows this EBML header ('matroska' / 'webm').
+    #[must_use]
     pub fn doc_type(&self) -> &str {
         &self.doc_type
     }
 
     /// The version of DocType interpreter used to create the file.
+    #[must_use]
     pub const fn doc_type_version(&self) -> u64 {
         self.doc_type_version
     }
 
     /// The minimum DocType version an interpreter has to support to read this file.
+    #[must_use]
     pub const fn doc_type_read_version(&self) -> u64 {
         self.doc_type_read_version
     }
@@ -234,21 +241,25 @@ impl<R: Read + Seek> ParsableElement<R> for Info {
 
 impl Info {
     /// Timestamp scale in nanoseconds (1_000_000 means all timestamps in the Segment are expressed in milliseconds).
+    #[must_use]
     pub const fn timestamp_scale(&self) -> NonZeroU64 {
         self.timestamp_scale
     }
 
     /// Duration of the Segment in nanoseconds based on TimestampScale.
+    #[must_use]
     pub const fn duration(&self) -> Option<f64> {
         self.duration
     }
 
     /// The date and time that the Segment was created by the muxing application or library.
+    #[must_use]
     pub const fn date_utc(&self) -> Option<i64> {
         self.date_utc
     }
 
     /// General name of the Segment.
+    #[must_use]
     pub fn title(&self) -> Option<&str> {
         match self.title.as_ref() {
             None => None,
@@ -257,11 +268,13 @@ impl Info {
     }
 
     /// Muxing application or library.
+    #[must_use]
     pub fn muxing_app(&self) -> &str {
         &self.muxing_app
     }
 
     /// Writing  application.
+    #[must_use]
     pub fn writing_app(&self) -> &str {
         &self.writing_app
     }
@@ -345,28 +358,33 @@ impl<R: Read + Seek> ParsableElement<R> for TrackEntry {
 
 impl TrackEntry {
     /// The track number as used in the block header.
+    #[must_use]
     pub const fn track_number(&self) -> NonZeroU64 {
         self.track_number
     }
 
     /// A unique ID to identify the track.
+    #[must_use]
     pub const fn track_uid(&self) -> NonZeroU64 {
         self.track_uid
     }
 
     /// The type of the track.
+    #[must_use]
     pub const fn track_type(&self) -> TrackType {
         self.track_type
     }
 
     /// Indicates if a track is usable. It is possible to turn a not usable track
     /// into a usable track using chapter codecs or control tracks.
+    #[must_use]
     pub const fn flag_enabled(&self) -> bool {
         self.flag_enabled
     }
 
     /// Set if that track (audio, video or subs) should be eligible
     /// for automatic selection by the player.
+    #[must_use]
     pub const fn flag_default(&self) -> bool {
         self.flag_default
     }
@@ -374,21 +392,25 @@ impl TrackEntry {
     /// Applies only to subtitles. Set if that track should be eligible for automatic selection
     /// by the player if it matches the user's language preference, even if the user's preferences
     /// would normally not enable subtitles with the selected audio track.
+    #[must_use]
     pub const fn flag_forced(&self) -> bool {
         self.flag_forced
     }
 
     /// Indicates if the track may contain blocks using lacing.
+    #[must_use]
     pub const fn flag_lacing(&self) -> bool {
         self.flag_lacing
     }
 
     /// Number of nanoseconds (not scaled via TimestampScale) per frame (one Element put into a (Simple)Block).
+    #[must_use]
     pub const fn default_duration(&self) -> Option<NonZeroU64> {
         self.default_duration
     }
 
     /// A human-readable track name.
+    #[must_use]
     pub fn name(&self) -> Option<&str> {
         match self.name.as_ref() {
             None => None,
@@ -397,6 +419,7 @@ impl TrackEntry {
     }
 
     /// Specifies the language of the track.
+    #[must_use]
     pub fn language(&self) -> Option<&str> {
         match self.language.as_ref() {
             None => None,
@@ -405,11 +428,13 @@ impl TrackEntry {
     }
 
     /// An ID corresponding to the codec.
+    #[must_use]
     pub fn codec_id(&self) -> &str {
         &self.codec_id
     }
 
     /// Private data only known to the codec.
+    #[must_use]
     pub fn codec_private(&self) -> Option<&[u8]> {
         match self.codec_private.as_ref() {
             None => None,
@@ -418,6 +443,7 @@ impl TrackEntry {
     }
 
     /// A human-readable string specifying the codec.
+    #[must_use]
     pub fn codec_name(&self) -> Option<&str> {
         match self.codec_name.as_ref() {
             None => None,
@@ -427,27 +453,32 @@ impl TrackEntry {
 
     /// CodecDelay is ehe codec-built-in delay in nanoseconds.
     /// This value must be subtracted from each block timestamp in order to get the actual timestamp.
+    #[must_use]
     pub const fn codec_delay(&self) -> Option<u64> {
         self.codec_delay
     }
 
     /// After a discontinuity, SeekPreRoll is the duration in nanoseconds of the data the decoder
     /// must decode before the decoded data is valid.
+    #[must_use]
     pub const fn seek_pre_roll(&self) -> Option<u64> {
         self.seek_pre_roll
     }
 
     /// Video settings.
+    #[must_use]
     pub const fn video(&self) -> Option<&Video> {
         self.video.as_ref()
     }
 
     /// Audio settings.
+    #[must_use]
     pub const fn audio(&self) -> Option<&Audio> {
         self.audio.as_ref()
     }
 
     /// Settings for several content encoding mechanisms like compression or encryption.
+    #[must_use]
     pub fn content_encodings(&self) -> Option<&[ContentEncoding]> {
         match &self.content_encodings {
             None => None,
@@ -495,21 +526,25 @@ impl<R: Read + Seek> ParsableElement<R> for Audio {
 
 impl Audio {
     /// Sampling frequency in Hz.
+    #[must_use]
     pub const fn sampling_frequency(&self) -> f64 {
         self.sampling_frequency
     }
 
     /// Real output sampling frequency in Hz.
+    #[must_use]
     pub const fn output_sampling_frequency(&self) -> Option<f64> {
         self.output_sampling_frequency
     }
 
     /// Numbers of channels in the track.
+    #[must_use]
     pub const fn channels(&self) -> NonZeroU64 {
         self.channels
     }
 
     /// Bits per sample.
+    #[must_use]
     pub const fn bit_depth(&self) -> Option<NonZeroU64> {
         self.bit_depth
     }
@@ -576,74 +611,88 @@ impl<R: Read + Seek> ParsableElement<R> for Video {
 impl Video {
     /// A flag to declare if the video is known to be progressive, or interlaced,
     /// and if applicable to declare details about the interlacement.
+    #[must_use]
     pub const fn flag_interlaced(&self) -> FlagInterlaced {
         self.flag_interlaced
     }
 
     /// Stereo-3D video mode.
+    #[must_use]
     pub const fn stereo_mode(&self) -> Option<StereoMode> {
         self.stereo_mode
     }
 
     /// Alpha Video Mode. Presence of this Element indicates that the
     /// BlockAdditional Element could contain Alpha data.
+    #[must_use]
     pub const fn alpha_mode(&self) -> Option<u64> {
         self.alpha_mode
     }
 
     /// Width of the encoded video frames in pixels.
+    #[must_use]
     pub const fn pixel_width(&self) -> NonZeroU64 {
         self.pixel_width
     }
 
     /// Height of the encoded video frames in pixels.
+    #[must_use]
     pub const fn pixel_height(&self) -> NonZeroU64 {
         self.pixel_height
     }
 
     /// The number of video pixels to remove at the bottom of the image.
+    #[must_use]
     pub const fn pixel_crop_bottom(&self) -> Option<u64> {
         self.pixel_crop_bottom
     }
 
     /// The number of video pixels to remove at the top of the image.
+    #[must_use]
     pub const fn pixel_crop_top(&self) -> Option<u64> {
         self.pixel_crop_top
     }
 
     /// The number of video pixels to remove on the left of the image.
+    #[must_use]
     pub const fn pixel_crop_left(&self) -> Option<u64> {
         self.pixel_crop_left
     }
 
     /// The number of video pixels to remove on the right of the image.
+    #[must_use]
     pub const fn pixel_crop_right(&self) -> Option<u64> {
         self.pixel_crop_right
     }
 
     /// Width of the video frames to display.
     /// Applies to the video frame after cropping (PixelCrop* Elements).
+    #[must_use]
     pub const fn display_width(&self) -> Option<NonZeroU64> {
         self.display_width
     }
 
     /// Height of the video frames to display.
     /// Applies to the video frame after cropping (PixelCrop* Elements).
+    #[must_use]
     pub const fn display_height(&self) -> Option<NonZeroU64> {
         self.display_height
     }
 
     /// How DisplayWidth & DisplayHeight are interpreted.
+    #[must_use]
     pub const fn display_unit(&self) -> Option<DisplayUnit> {
         self.display_unit
     }
 
     /// Specify the possible modifications to the aspect ratio.
+    #[must_use]
     pub const fn aspect_ratio_type(&self) -> Option<AspectRatioType> {
         self.aspect_ratio_type
     }
 
     /// Settings describing the colour format.
+    #[must_use]
     pub const fn colour(&self) -> Option<&Colour> {
         self.colour.as_ref()
     }
@@ -711,72 +760,86 @@ impl<R: Read + Seek> ParsableElement<R> for Colour {
 impl Colour {
     /// The matrix coefficients of the video used to derive luma and chroma values
     /// from red, green, and blue color primaries.
+    #[must_use]
     pub const fn matrix_coefficients(&self) -> Option<MatrixCoefficients> {
         self.matrix_coefficients
     }
     /// Number of decoded bits per channel.
+    #[must_use]
     pub const fn bits_per_channel(&self) -> Option<u64> {
         self.bits_per_channel
     }
 
     /// The amount of pixels to remove in the Cr and Cb channels
     /// for every pixel not removed horizontally.
+    #[must_use]
     pub const fn chroma_subsampling_horz(&self) -> Option<u64> {
         self.chroma_subsampling_horz
     }
 
     /// The amount of pixels to remove in the Cr and Cb channels
     /// for every pixel not removed vertically.
+    #[must_use]
     pub const fn chroma_subsampling_vert(&self) -> Option<u64> {
         self.chroma_subsampling_vert
     }
 
     /// The amount of pixels to remove in the Cb channel for every pixel not removed horizontally.
+    #[must_use]
     pub const fn cb_subsampling_horz(&self) -> Option<u64> {
         self.cb_subsampling_horz
     }
 
     /// The amount of pixels to remove in the Cb channel for every pixel not removed vertically.
+    #[must_use]
     pub const fn cb_subsampling_vert(&self) -> Option<u64> {
         self.cb_subsampling_vert
     }
 
     /// How chroma is sub sampled horizontally.
+    #[must_use]
     pub const fn chroma_sitting_horz(&self) -> Option<ChromaSitingHorz> {
         self.chroma_sitting_horz
     }
 
     /// How chroma is sub sampled vertically.
+    #[must_use]
     pub const fn chroma_sitting_vert(&self) -> Option<ChromaSitingVert> {
         self.chroma_sitting_vert
     }
 
     /// Clipping of the color ranges.
+    #[must_use]
     pub const fn range(&self) -> Option<Range> {
         self.range
     }
 
     /// The transfer characteristics of the video.
+    #[must_use]
     pub const fn transfer_characteristics(&self) -> Option<TransferCharacteristics> {
         self.transfer_characteristics
     }
 
     /// The colour primaries of the video.
+    #[must_use]
     pub const fn primaries(&self) -> Option<Primaries> {
         self.primaries
     }
 
     /// Maximum brightness of a single pixel (cd/m^2^).
+    #[must_use]
     pub const fn max_cll(&self) -> Option<u64> {
         self.max_cll
     }
 
     /// Maximum brightness of a single full frame (cd/m^2^).
+    #[must_use]
     pub const fn max_fall(&self) -> Option<u64> {
         self.max_fall
     }
 
     /// SMPTE 2086 mastering data.
+    #[must_use]
     pub const fn mastering_metadata(&self) -> Option<&MasteringMetadata> {
         self.mastering_metadata.as_ref()
     }
@@ -831,51 +894,61 @@ impl<R: Read + Seek> ParsableElement<R> for MasteringMetadata {
 
 impl MasteringMetadata {
     /// Red X chromaticity coordinate, as defined by CIE 1931.
+    #[must_use]
     pub const fn primary_r_chromaticity_x(&self) -> Option<f64> {
         self.primary_r_chromaticity_x
     }
 
     /// Red Y chromaticity coordinate, as defined by CIE 1931.
+    #[must_use]
     pub const fn primary_r_chromaticity_y(&self) -> Option<f64> {
         self.primary_r_chromaticity_y
     }
 
     /// Green X chromaticity coordinate, as defined by CIE 1931.
+    #[must_use]
     pub const fn primary_g_chromaticity_x(&self) -> Option<f64> {
         self.primary_g_chromaticity_x
     }
 
     /// Green Y chromaticity coordinate, as defined by CIE 1931
+    #[must_use]
     pub const fn primary_g_chromaticity_y(&self) -> Option<f64> {
         self.primary_g_chromaticity_y
     }
 
     /// Blue X chromaticity coordinate, as defined by CIE 1931.
+    #[must_use]
     pub const fn primary_b_chromaticity_x(&self) -> Option<f64> {
         self.primary_b_chromaticity_x
     }
 
     /// Blue Y chromaticity coordinate, as defined by CIE 1931.
+    #[must_use]
     pub const fn primary_b_chromaticity_y(&self) -> Option<f64> {
         self.primary_b_chromaticity_y
     }
 
     /// White X chromaticity coordinate, as defined by CIE 1931.
+    #[must_use]
     pub const fn white_point_chromaticity_x(&self) -> Option<f64> {
         self.white_point_chromaticity_x
     }
 
     /// White Y chromaticity coordinate, as defined by CIE 1931.
+    #[must_use]
     pub const fn white_point_chromaticity_y(&self) -> Option<f64> {
         self.white_point_chromaticity_y
     }
 
     /// Maximum luminance. Represented in candelas per square meter (cd/m^2^).
+    #[must_use]
     pub const fn luminance_max(&self) -> Option<f64> {
         self.luminance_max
     }
 
     /// Minimum luminance. Represented in candelas per square meter (cd/m^2^).
+    #[must_use]
     pub const fn luminance_min(&self) -> Option<f64> {
         self.luminance_min
     }
@@ -918,6 +991,7 @@ impl<R: Read + Seek> ParsableElement<R> for ContentEncoding {
 impl ContentEncoding {
     /// Tells when this modification was used during encoding / muxing starting
     /// with 0 and counting upwards.
+    #[must_use]
     pub const fn order(&self) -> u64 {
         self.order
     }
@@ -929,16 +1003,19 @@ impl ContentEncoding {
     /// 1 - All frame contents, excluding lacing data.
     /// 2 - The track's private data.
     /// 4 - The next ContentEncoding.
+    #[must_use]
     pub const fn scope(&self) -> u64 {
         self.scope
     }
 
     /// Describes what kind of transformation is applied.
+    #[must_use]
     pub const fn encoding_type(&self) -> ContentEncodingType {
         self.encoding_type
     }
 
     /// Settings describing the encryption used.
+    #[must_use]
     pub const fn encryption(&self) -> Option<&ContentEncryption> {
         self.encryption.as_ref()
     }
@@ -978,11 +1055,13 @@ impl<R: Read + Seek> ParsableElement<R> for ContentEncryption {
 
 impl ContentEncryption {
     /// The encryption algorithm used.
+    #[must_use]
     pub const fn algo(&self) -> ContentEncAlgo {
         self.algo
     }
 
     /// The encryption algorithm used.
+    #[must_use]
     pub fn key_id(&self) -> Option<&[u8]> {
         match self.key_id.as_ref() {
             None => None,
@@ -991,6 +1070,7 @@ impl ContentEncryption {
     }
 
     /// The encryption algorithm used.
+    #[must_use]
     pub const fn aes_settings(&self) -> Option<&ContentEncAesSettings> {
         self.aes_settings.as_ref()
     }
@@ -1017,6 +1097,7 @@ impl<R: Read + Seek> ParsableElement<R> for ContentEncAesSettings {
 
 impl ContentEncAesSettings {
     /// The AES cipher mode used in the encryption.
+    #[must_use]
     pub const fn aes_settings_cipher_mode(&self) -> Option<AesSettingsCipherMode> {
         self.aes_settings_cipher_mode
     }
@@ -1041,6 +1122,7 @@ impl<R: Read + Seek> ParsableElement<R> for EditionEntry {
 
 impl EditionEntry {
     /// Contains the atom information to use as the chapter atom (apply to all tracks).
+    #[must_use]
     pub fn chapter_atoms(&self) -> &[ChapterAtom] {
         self.chapter_atoms.as_ref()
     }
@@ -1080,11 +1162,13 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
 
 impl ChapterAtom {
     /// A unique ID to identify the Chapter.
+    #[must_use]
     pub const fn uid(&self) -> NonZeroU64 {
         self.uid
     }
 
     /// A unique string ID to identify the Chapter.
+    #[must_use]
     pub fn string_uid(&self) -> Option<&str> {
         match self.string_uid.as_ref() {
             None => None,
@@ -1093,16 +1177,19 @@ impl ChapterAtom {
     }
 
     /// Timestamp of the start of Chapter.
+    #[must_use]
     pub const fn time_start(&self) -> u64 {
         self.time_start
     }
 
     /// Timestamp of the end of Chapter.
+    #[must_use]
     pub const fn time_end(&self) -> Option<u64> {
         self.time_end
     }
 
     /// Contains all possible strings to use for the chapter display.
+    #[must_use]
     pub fn displays(&self) -> &[ChapterDisplay] {
         self.displays.as_ref()
     }
@@ -1137,11 +1224,13 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterDisplay {
 
 impl ChapterDisplay {
     /// Contains the string to use as the chapter atom.
+    #[must_use]
     pub fn string(&self) -> &str {
         self.string.as_ref()
     }
 
     /// The languages corresponding to the string, in the bibliographic ISO-639-2 form.
+    #[must_use]
     pub fn language(&self) -> Option<&str> {
         match self.language.as_ref() {
             None => None,
@@ -1150,6 +1239,7 @@ impl ChapterDisplay {
     }
 
     /// Specifies the language according to BCP47 and using the IANA Language Subtag Registry.
+    #[must_use]
     pub fn language_ietf(&self) -> Option<&str> {
         match self.language_ietf.as_ref() {
             None => None,
@@ -1159,6 +1249,7 @@ impl ChapterDisplay {
 
     /// The countries corresponding to the string, same 2 octets country-codes as in
     /// Internet domains based on ISO3166-1 alpha-2 codes.
+    #[must_use]
     pub fn country(&self) -> Option<&str> {
         match self.country.as_ref() {
             None => None,
@@ -1191,11 +1282,13 @@ impl<R: Read + Seek> ParsableElement<R> for Tag {
 impl Tag {
     /// Specifies which other elements the metadata represented by the tag applies to.
     /// If empty or not present, then the Tag describes everything in the Segment.
+    #[must_use]
     pub const fn targets(&self) -> Option<&Targets> {
         self.targets.as_ref()
     }
 
     /// Contains general information about the target.
+    #[must_use]
     pub fn simple_tags(&self) -> &[SimpleTag] {
         self.simple_tags.as_slice()
     }
@@ -1227,12 +1320,14 @@ impl<R: Read + Seek> ParsableElement<R> for Targets {
 
 impl Targets {
     /// A number to indicate the logical level of the target.
+    #[must_use]
     pub const fn target_type_value(&self) -> Option<u64> {
         self.target_type_value
     }
 
     /// A unique ID to identify the track(s) the tags belong to.
     /// If the value is 0 at this level, the tags apply to all tracks in the Segment.
+    #[must_use]
     pub const fn tag_track_uid(&self) -> Option<u64> {
         self.tag_track_uid
     }
@@ -1270,11 +1365,13 @@ impl<R: Read + Seek> ParsableElement<R> for SimpleTag {
 
 impl SimpleTag {
     /// The value of the tag.
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
     /// Specifies the language of the tag.
+    #[must_use]
     pub fn language(&self) -> Option<&str> {
         match self.language.as_ref() {
             None => None,
@@ -1283,11 +1380,13 @@ impl SimpleTag {
     }
 
     /// Indicate if this is the default/original language to use for the given tag.
+    #[must_use]
     pub const fn default(&self) -> Option<bool> {
         self.default
     }
 
     /// The value of the tag, if it is a string.
+    #[must_use]
     pub fn string(&self) -> Option<&str> {
         match self.string.as_ref() {
             None => None,
@@ -1296,6 +1395,7 @@ impl SimpleTag {
     }
 
     /// The value of the tag, if it is binary.
+    #[must_use]
     pub fn binary(&self) -> Option<&[u8]> {
         match self.binary.as_ref() {
             None => None,
