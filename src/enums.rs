@@ -40,20 +40,20 @@ pub enum MatrixCoefficients {
 impl From<u64> for MatrixCoefficients {
     fn from(d: u64) -> Self {
         match d {
-            0 => MatrixCoefficients::Identity,
-            1 => MatrixCoefficients::Bt709,
-            4 => MatrixCoefficients::Fcc73682,
-            5 => MatrixCoefficients::Bt470bg,
-            6 => MatrixCoefficients::Smpte170,
-            7 => MatrixCoefficients::Smpte240,
-            8 => MatrixCoefficients::YCoCg,
-            9 => MatrixCoefficients::Bt2020Ncl,
-            10 => MatrixCoefficients::Bt2020Cl,
-            11 => MatrixCoefficients::SmpteSt2085,
-            12 => MatrixCoefficients::ChromaDerivedNcl,
-            13 => MatrixCoefficients::ChromaDerivedCl,
-            14 => MatrixCoefficients::Bt2100,
-            _ => MatrixCoefficients::Unknown,
+            0 => Self::Identity,
+            1 => Self::Bt709,
+            4 => Self::Fcc73682,
+            5 => Self::Bt470bg,
+            6 => Self::Smpte170,
+            7 => Self::Smpte240,
+            8 => Self::YCoCg,
+            9 => Self::Bt2020Ncl,
+            10 => Self::Bt2020Cl,
+            11 => Self::SmpteSt2085,
+            12 => Self::ChromaDerivedNcl,
+            13 => Self::ChromaDerivedCl,
+            14 => Self::Bt2100,
+            _ => Self::Unknown,
         }
     }
 }
@@ -76,11 +76,11 @@ pub enum DisplayUnit {
 impl From<u64> for DisplayUnit {
     fn from(d: u64) -> Self {
         match d {
-            0 => DisplayUnit::Pixels,
-            1 => DisplayUnit::Centimeters,
-            2 => DisplayUnit::Inches,
-            3 => DisplayUnit::DisplayAspectRatio,
-            _ => DisplayUnit::Unknown,
+            0 => Self::Pixels,
+            1 => Self::Centimeters,
+            2 => Self::Inches,
+            3 => Self::DisplayAspectRatio,
+            _ => Self::Unknown,
         }
     }
 }
@@ -101,10 +101,10 @@ pub enum AspectRatioType {
 impl From<u64> for AspectRatioType {
     fn from(d: u64) -> Self {
         match d {
-            0 => AspectRatioType::FreeResizing,
-            1 => AspectRatioType::KeepAspectRatio,
-            2 => AspectRatioType::Fixed,
-            _ => AspectRatioType::Unknown,
+            0 => Self::FreeResizing,
+            1 => Self::KeepAspectRatio,
+            2 => Self::Fixed,
+            _ => Self::Unknown,
         }
     }
 }
@@ -135,15 +135,15 @@ pub enum TrackType {
 impl From<u64> for TrackType {
     fn from(d: u64) -> Self {
         match d {
-            1 => TrackType::Video,
-            2 => TrackType::Audio,
-            3 => TrackType::Complex,
-            16 => TrackType::Logo,
-            17 => TrackType::Subtitle,
-            18 => TrackType::Buttons,
-            32 => TrackType::Control,
-            33 => TrackType::Metadata,
-            _ => TrackType::Unknown,
+            1 => Self::Video,
+            2 => Self::Audio,
+            3 => Self::Complex,
+            16 => Self::Logo,
+            17 => Self::Subtitle,
+            18 => Self::Buttons,
+            32 => Self::Control,
+            33 => Self::Metadata,
+            _ => Self::Unknown,
         }
     }
 }
@@ -162,9 +162,9 @@ pub enum FlagInterlaced {
 impl From<u64> for FlagInterlaced {
     fn from(d: u64) -> Self {
         match d {
-            1 => FlagInterlaced::Interlaced,
-            2 => FlagInterlaced::Progressive,
-            _ => FlagInterlaced::Unknown,
+            1 => Self::Interlaced,
+            2 => Self::Progressive,
+            _ => Self::Unknown,
         }
     }
 }
@@ -189,12 +189,12 @@ pub enum FieldOrder {
 impl From<u64> for FieldOrder {
     fn from(d: u64) -> Self {
         match d {
-            0 => FieldOrder::Progressive,
-            1 => FieldOrder::Tff,
-            6 => FieldOrder::Bff,
-            9 => FieldOrder::BffSwapped,
-            14 => FieldOrder::TffSwapped,
-            _ => FieldOrder::Unknown,
+            0 => Self::Progressive,
+            1 => Self::Tff,
+            6 => Self::Bff,
+            9 => Self::BffSwapped,
+            14 => Self::TffSwapped,
+            _ => Self::Unknown,
         }
     }
 }
@@ -239,22 +239,22 @@ pub enum StereoMode {
 impl From<u64> for StereoMode {
     fn from(d: u64) -> Self {
         match d {
-            0 => StereoMode::Mono,
-            1 => StereoMode::SideBySideLeftEyeFirst,
-            2 => StereoMode::TopBottomRightEyeFirst,
-            3 => StereoMode::TopBottomLeftEyeFirst,
-            4 => StereoMode::CheckboardRightEyeFirst,
-            5 => StereoMode::CheckboardLeftEyeFirst,
-            6 => StereoMode::RowInterleavedRightEyeFirst,
-            7 => StereoMode::RowInterleavedLeftEyeFirst,
-            8 => StereoMode::ColumnInterleavedRightEyeFirst,
-            9 => StereoMode::ColumnInterleavedLeftEyeFirst,
-            10 => StereoMode::AnaglyphCyanRed,
-            11 => StereoMode::SideBySideRightEyeFirst,
-            12 => StereoMode::AnaglyphGreenMagenta,
-            13 => StereoMode::LacedLeftEyeFirst,
-            14 => StereoMode::LacedRightEyeFirst,
-            _ => StereoMode::Unknown,
+            0 => Self::Mono,
+            1 => Self::SideBySideLeftEyeFirst,
+            2 => Self::TopBottomRightEyeFirst,
+            3 => Self::TopBottomLeftEyeFirst,
+            4 => Self::CheckboardRightEyeFirst,
+            5 => Self::CheckboardLeftEyeFirst,
+            6 => Self::RowInterleavedRightEyeFirst,
+            7 => Self::RowInterleavedLeftEyeFirst,
+            8 => Self::ColumnInterleavedRightEyeFirst,
+            9 => Self::ColumnInterleavedLeftEyeFirst,
+            10 => Self::AnaglyphCyanRed,
+            11 => Self::SideBySideRightEyeFirst,
+            12 => Self::AnaglyphGreenMagenta,
+            13 => Self::LacedLeftEyeFirst,
+            14 => Self::LacedRightEyeFirst,
+            _ => Self::Unknown,
         }
     }
 }
@@ -273,9 +273,9 @@ pub enum ChromaSitingHorz {
 impl From<u64> for ChromaSitingHorz {
     fn from(d: u64) -> Self {
         match d {
-            1 => ChromaSitingHorz::LeftCollated,
-            2 => ChromaSitingHorz::Half,
-            _ => ChromaSitingHorz::Unknown,
+            1 => Self::LeftCollated,
+            2 => Self::Half,
+            _ => Self::Unknown,
         }
     }
 }
@@ -294,9 +294,9 @@ pub enum ChromaSitingVert {
 impl From<u64> for ChromaSitingVert {
     fn from(d: u64) -> Self {
         match d {
-            1 => ChromaSitingVert::LeftCollated,
-            2 => ChromaSitingVert::Half,
-            _ => ChromaSitingVert::Unknown,
+            1 => Self::LeftCollated,
+            2 => Self::Half,
+            _ => Self::Unknown,
         }
     }
 }
@@ -317,10 +317,10 @@ pub enum Range {
 impl From<u64> for Range {
     fn from(d: u64) -> Self {
         match d {
-            1 => Range::Broadcast,
-            2 => Range::Full,
-            3 => Range::Defined,
-            _ => Range::Unknown,
+            1 => Self::Broadcast,
+            2 => Self::Full,
+            3 => Self::Defined,
+            _ => Self::Unknown,
         }
     }
 }
@@ -370,23 +370,23 @@ pub enum TransferCharacteristics {
 impl From<u64> for TransferCharacteristics {
     fn from(d: u64) -> Self {
         match d {
-            1 => TransferCharacteristics::Bt709,
-            4 => TransferCharacteristics::Bt407m,
-            5 => TransferCharacteristics::Bt407bg,
-            6 => TransferCharacteristics::Smpte170,
-            7 => TransferCharacteristics::Smpte240,
-            8 => TransferCharacteristics::Linear,
-            9 => TransferCharacteristics::Log,
-            10 => TransferCharacteristics::LogSqrt,
-            11 => TransferCharacteristics::Iec61966_2_4,
-            12 => TransferCharacteristics::Bt1361,
-            13 => TransferCharacteristics::Iec61966_2_1,
-            14 => TransferCharacteristics::Bt220_10,
-            15 => TransferCharacteristics::Bt220_12,
-            16 => TransferCharacteristics::Bt2100,
-            17 => TransferCharacteristics::SmpteSt428_1,
-            18 => TransferCharacteristics::Hlg,
-            _ => TransferCharacteristics::Unknown,
+            1 => Self::Bt709,
+            4 => Self::Bt407m,
+            5 => Self::Bt407bg,
+            6 => Self::Smpte170,
+            7 => Self::Smpte240,
+            8 => Self::Linear,
+            9 => Self::Log,
+            10 => Self::LogSqrt,
+            11 => Self::Iec61966_2_4,
+            12 => Self::Bt1361,
+            13 => Self::Iec61966_2_1,
+            14 => Self::Bt220_10,
+            15 => Self::Bt220_12,
+            16 => Self::Bt2100,
+            17 => Self::SmpteSt428_1,
+            18 => Self::Hlg,
+            _ => Self::Unknown,
         }
     }
 }
@@ -426,18 +426,18 @@ pub enum Primaries {
 impl From<u64> for Primaries {
     fn from(d: u64) -> Self {
         match d {
-            1 => Primaries::Bt709,
-            4 => Primaries::Bt470m,
-            5 => Primaries::Bt601,
-            6 => Primaries::Smpte170,
-            7 => Primaries::Smpte240,
-            8 => Primaries::Film,
-            9 => Primaries::Bt2020,
-            10 => Primaries::SmpteSt428_1,
-            11 => Primaries::SmpteRp432_2,
-            12 => Primaries::SmpteEg432_2,
-            22 => Primaries::JedecP22,
-            _ => Primaries::Unknown,
+            1 => Self::Bt709,
+            4 => Self::Bt470m,
+            5 => Self::Bt601,
+            6 => Self::Smpte170,
+            7 => Self::Smpte240,
+            8 => Self::Film,
+            9 => Self::Bt2020,
+            10 => Self::SmpteSt428_1,
+            11 => Self::SmpteRp432_2,
+            12 => Self::SmpteEg432_2,
+            22 => Self::JedecP22,
+            _ => Self::Unknown,
         }
     }
 }
@@ -456,9 +456,9 @@ pub enum ContentEncodingType {
 impl From<u64> for ContentEncodingType {
     fn from(d: u64) -> Self {
         match d {
-            0 => ContentEncodingType::Compression,
-            1 => ContentEncodingType::Encryption,
-            _ => ContentEncodingType::Unknown,
+            0 => Self::Compression,
+            1 => Self::Encryption,
+            _ => Self::Unknown,
         }
     }
 }
@@ -487,13 +487,13 @@ pub enum ContentEncAlgo {
 impl From<u64> for ContentEncAlgo {
     fn from(d: u64) -> Self {
         match d {
-            0 => ContentEncAlgo::NotEncrypted,
-            1 => ContentEncAlgo::Des,
-            2 => ContentEncAlgo::TripleDes,
-            3 => ContentEncAlgo::Twofish,
-            4 => ContentEncAlgo::Blowfish,
-            5 => ContentEncAlgo::Aes,
-            _ => ContentEncAlgo::Unknown,
+            0 => Self::NotEncrypted,
+            1 => Self::Des,
+            2 => Self::TripleDes,
+            3 => Self::Twofish,
+            4 => Self::Blowfish,
+            5 => Self::Aes,
+            _ => Self::Unknown,
         }
     }
 }
@@ -512,9 +512,9 @@ pub enum AesSettingsCipherMode {
 impl From<u64> for AesSettingsCipherMode {
     fn from(d: u64) -> Self {
         match d {
-            0 => AesSettingsCipherMode::Ctr,
-            1 => AesSettingsCipherMode::Cbc,
-            _ => AesSettingsCipherMode::Unknown,
+            0 => Self::Ctr,
+            1 => Self::Cbc,
+            _ => Self::Unknown,
         }
     }
 }

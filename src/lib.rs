@@ -88,7 +88,7 @@ impl From<Vec<u8>> for Frame {
     fn from(data: Vec<u8>) -> Self {
         Self {
             data,
-            ..Frame::default()
+            ..Self::default()
         }
     }
 }
@@ -488,7 +488,7 @@ impl<R: Read + Seek> ParsableElement<R> for Audio {
             }
         }
 
-        Ok(Audio {
+        Ok(Self {
             sampling_frequency,
             output_sampling_frequency,
             channels,

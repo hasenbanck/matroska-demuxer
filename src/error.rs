@@ -46,75 +46,75 @@ pub enum DemuxError {
 impl std::fmt::Display for DemuxError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DemuxError::IoError(err) => {
+            Self::IoError(err) => {
                 write!(f, "{:?}", err.source())
             }
-            DemuxError::FromUtf8Error(err) => {
+            Self::FromUtf8Error(err) => {
                 write!(f, "{:?}", err.source())
             }
-            DemuxError::TryFromIntError(err) => {
+            Self::TryFromIntError(err) => {
                 write!(f, "{:?}", err.source())
             }
-            DemuxError::InvalidEbmlElementId => {
+            Self::InvalidEbmlElementId => {
                 write!(f, "invalid EBML Element ID was found")
             }
-            DemuxError::InvalidEbmlDataSize => {
+            Self::InvalidEbmlDataSize => {
                 write!(f, "invalid EBML data size was found")
             }
-            DemuxError::InvalidEbmlHeader(message) => {
+            Self::InvalidEbmlHeader(message) => {
                 write!(f, "invalid EBML header: {}", message)
             }
-            DemuxError::WrongFloatSize(size) => {
+            Self::WrongFloatSize(size) => {
                 write!(
                     f,
                     "floats need to be either 4 or 7 bytes. Found size of: {}",
                     size
                 )
             }
-            DemuxError::WrongIntegerSize(size) => {
+            Self::WrongIntegerSize(size) => {
                 write!(
                     f,
                     "integers can be at most 8 bytes. Found size of: {}",
                     size
                 )
             }
-            DemuxError::WrongDateSize(size) => {
+            Self::WrongDateSize(size) => {
                 write!(f, "date can be at most 8 bytes. Found size of: {}", size)
             }
-            DemuxError::UnsupportedDocType(doctype) => {
+            Self::UnsupportedDocType(doctype) => {
                 write!(
                     f,
                     "unsupported DocType. Only 'matroska' and 'webm' are supported': {}",
                     doctype
                 )
             }
-            DemuxError::UnsupportedDocTypeReadVersion(version) => {
+            Self::UnsupportedDocTypeReadVersion(version) => {
                 write!(f, "unsupported DocTypeReadVersion: {}", version)
             }
-            DemuxError::UnexpectedElement((expected, found)) => {
+            Self::UnexpectedElement((expected, found)) => {
                 write!(
                     f,
                     "unexpected element found. Expected: {:?} Found: {:?}",
                     expected, found
                 )
             }
-            DemuxError::UnexpectedDataType => {
+            Self::UnexpectedDataType => {
                 write!(f, "unexpected data type found")
             }
-            DemuxError::ElementNotFound(element_id) => {
+            Self::ElementNotFound(element_id) => {
                 write!(f, "can't find Element: {:?}", element_id)
             }
-            DemuxError::CantFindCluster => {
+            Self::CantFindCluster => {
                 write!(f, "can't find the first cluster element")
             }
-            DemuxError::NonZeroValueIsZero(element_id) => {
+            Self::NonZeroValueIsZero(element_id) => {
                 write!(
                     f,
                     "a value that should not be zero was zero: {:?}",
                     element_id
                 )
             }
-            DemuxError::PositiveValueIsNotPositive => {
+            Self::PositiveValueIsNotPositive => {
                 write!(f, "a value that should be positive is not positive")
             }
         }
@@ -122,29 +122,29 @@ impl std::fmt::Display for DemuxError {
 }
 
 impl From<std::io::Error> for DemuxError {
-    fn from(err: std::io::Error) -> DemuxError {
-        DemuxError::IoError(err)
+    fn from(err: std::io::Error) -> Self {
+        Self::IoError(err)
     }
 }
 
 impl From<std::string::FromUtf8Error> for DemuxError {
-    fn from(err: std::string::FromUtf8Error) -> DemuxError {
-        DemuxError::FromUtf8Error(err)
+    fn from(err: std::string::FromUtf8Error) -> Self {
+        Self::FromUtf8Error(err)
     }
 }
 
 impl From<std::num::TryFromIntError> for DemuxError {
-    fn from(err: std::num::TryFromIntError) -> DemuxError {
-        DemuxError::TryFromIntError(err)
+    fn from(err: std::num::TryFromIntError) -> Self {
+        Self::TryFromIntError(err)
     }
 }
 
 impl Error for DemuxError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match *self {
-            DemuxError::IoError(ref e) => Some(e),
-            DemuxError::FromUtf8Error(ref e) => Some(e),
-            DemuxError::TryFromIntError(ref e) => Some(e),
+            Self::IoError(ref e) => Some(e),
+            Self::FromUtf8Error(ref e) => Some(e),
+            Self::TryFromIntError(ref e) => Some(e),
             _ => None,
         }
     }

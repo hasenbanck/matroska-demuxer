@@ -22,10 +22,10 @@ enum Lacing {
 impl From<u8> for Lacing {
     fn from(d: u8) -> Self {
         match d {
-            1 => Lacing::Xiph,
-            2 => Lacing::FixedSize,
-            3 => Lacing::Ebml,
-            _ => Lacing::None,
+            1 => Self::Xiph,
+            2 => Self::FixedSize,
+            3 => Self::Ebml,
+            _ => Self::None,
         }
     }
 }
