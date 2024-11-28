@@ -62,47 +62,40 @@ impl std::fmt::Display for DemuxError {
                 write!(f, "invalid EBML data size was found")
             }
             Self::InvalidEbmlHeader(message) => {
-                write!(f, "invalid EBML header: {}", message)
+                write!(f, "invalid EBML header: {message}",)
             }
             Self::WrongFloatSize(size) => {
                 write!(
                     f,
-                    "floats need to be either 4 or 7 bytes. Found size of: {}",
-                    size
+                    "floats need to be either 4 or 7 bytes. Found size of: {size}",
                 )
             }
             Self::WrongIntegerSize(size) => {
-                write!(
-                    f,
-                    "integers can be at most 8 bytes. Found size of: {}",
-                    size
-                )
+                write!(f, "integers can be at most 8 bytes. Found size of: {size}",)
             }
             Self::WrongDateSize(size) => {
-                write!(f, "date can be at most 8 bytes. Found size of: {}", size)
+                write!(f, "date can be at most 8 bytes. Found size of: {size}",)
             }
             Self::UnsupportedDocType(doctype) => {
                 write!(
                     f,
-                    "unsupported DocType. Only 'matroska' and 'webm' are supported': {}",
-                    doctype
+                    "unsupported DocType. Only 'matroska' and 'webm' are supported': {doctype}",
                 )
             }
             Self::UnsupportedDocTypeReadVersion(version) => {
-                write!(f, "unsupported DocTypeReadVersion: {}", version)
+                write!(f, "unsupported DocTypeReadVersion: {version}")
             }
             Self::UnexpectedElement((expected, found)) => {
                 write!(
                     f,
-                    "unexpected element found. Expected: {:?} Found: {:?}",
-                    expected, found
+                    "unexpected element found. Expected: {expected:?} Found: {found:?}",
                 )
             }
             Self::UnexpectedDataType => {
                 write!(f, "unexpected data type found")
             }
             Self::ElementNotFound(element_id) => {
-                write!(f, "can't find Element: {:?}", element_id)
+                write!(f, "can't find Element: {element_id:?}",)
             }
             Self::CantFindCluster => {
                 write!(f, "can't find the first cluster element")
@@ -110,8 +103,7 @@ impl std::fmt::Display for DemuxError {
             Self::NonZeroValueIsZero(element_id) => {
                 write!(
                     f,
-                    "a value that should not be zero was zero: {:?}",
-                    element_id
+                    "a value that should not be zero was zero: {element_id:?}",
                 )
             }
             Self::PositiveValueIsNotPositive => {

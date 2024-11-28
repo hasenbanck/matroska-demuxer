@@ -122,29 +122,25 @@ impl<R: Read + Seek> ParsableElement<R> for EbmlHeader {
 
         if trimmed_doc_type != "matroska" && trimmed_doc_type != "webm" {
             return Err(DemuxError::InvalidEbmlHeader(format!(
-                "unsupported DocType: {}",
-                doc_type
+                "unsupported DocType: {doc_type}",
             )));
         }
 
         if doc_type_read_version >= DEMUXER_DOC_TYPE_VERSION {
             return Err(DemuxError::InvalidEbmlHeader(format!(
-                "unsupported DocTypeReadVersion: {}",
-                doc_type_read_version
+                "unsupported DocTypeReadVersion: {doc_type_read_version}",
             )));
         }
 
         if max_id_length > 4 {
             return Err(DemuxError::InvalidEbmlHeader(format!(
-                "unsupported MaxIdLength: {}",
-                max_id_length
+                "unsupported MaxIdLength: {max_id_length}",
             )));
         }
 
         if max_size_length > 8 {
             return Err(DemuxError::InvalidEbmlHeader(format!(
-                "unsupported MaxSizeLength: {}",
-                max_size_length
+                "unsupported MaxSizeLength: {max_size_length}",
             )));
         }
 
