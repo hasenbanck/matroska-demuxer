@@ -11,3 +11,22 @@ keywords = ["matroska", "webm", "demuxer", "demux"]
 edition = "2021"
 rust-version = "1.70"
 
+
+[lints.rust]
+missing_docs = "deny"
+unused_imports = "deny"
+unused_must_use = "deny"
+
+[lints.clippy]
+bind_instead_of_map = "deny"
+borrowed_box = "deny"
+cast_lossless = "deny"
+clone_on_copy = "deny"
+derive_partial_eq_without_eq = "deny"
+extra_unused_lifetimes = "deny"
+if_not_else = "deny"
+match_same_arms = "deny"
+missing_fields_in_debug = "deny"
+or_fun_call = "deny"
+trivially_copy_pass_by_ref = "deny"
+useless_conversion = "deny"
