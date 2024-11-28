@@ -1411,7 +1411,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
             build_seek_head(&mut file, segment_data_offset, &mut seek_head)?;
         }
 
-        if seek_head.get(&ElementId::Cluster).is_none() {
+        if !seek_head.contains_key(&ElementId::Cluster) {
             find_first_cluster_offset(&mut file, &mut seek_head)?;
         }
 
