@@ -3,7 +3,7 @@
 #![deny(clippy::panic)]
 #![forbid(unsafe_code)]
 #![forbid(clippy::unwrap_used)]
-//! A demuxer that can demux Matroska and WebM container files.
+//! A demuxer that can demux Matroska and `WebM` container files.
 //!
 //! # Example:
 //! ```no_run
@@ -187,13 +187,13 @@ impl EbmlHeader {
         &self.doc_type
     }
 
-    /// The version of DocType interpreter used to create the file.
+    /// The version of `DocType` interpreter used to create the file.
     #[must_use]
     pub const fn doc_type_version(&self) -> u64 {
         self.doc_type_version
     }
 
-    /// The minimum DocType version an interpreter has to support to read this file.
+    /// The minimum `DocType` version an interpreter has to support to read this file.
     #[must_use]
     pub const fn doc_type_read_version(&self) -> u64 {
         self.doc_type_read_version
@@ -240,13 +240,13 @@ impl<R: Read + Seek> ParsableElement<R> for Info {
 }
 
 impl Info {
-    /// Timestamp scale in nanoseconds (1_000_000 means all timestamps in the Segment are expressed in milliseconds).
+    /// Timestamp scale in nanoseconds (`1_000_000` means all timestamps in the Segment are expressed in milliseconds).
     #[must_use]
     pub const fn timestamp_scale(&self) -> NonZeroU64 {
         self.timestamp_scale
     }
 
-    /// Duration of the Segment in nanoseconds based on TimestampScale.
+    /// Duration of the Segment in nanoseconds based on `TimestampScale`.
     #[must_use]
     pub const fn duration(&self) -> Option<f64> {
         self.duration
@@ -403,7 +403,7 @@ impl TrackEntry {
         self.flag_lacing
     }
 
-    /// Number of nanoseconds (not scaled via TimestampScale) per frame (one Element put into a (Simple)Block).
+    /// Number of nanoseconds (not scaled via `TimestampScale`) per frame (one Element put into a (Simple)Block).
     #[must_use]
     pub const fn default_duration(&self) -> Option<NonZeroU64> {
         self.default_duration
@@ -451,14 +451,14 @@ impl TrackEntry {
         }
     }
 
-    /// CodecDelay is ehe codec-built-in delay in nanoseconds.
+    /// `CodecDelay` is ehe codec-built-in delay in nanoseconds.
     /// This value must be subtracted from each block timestamp in order to get the actual timestamp.
     #[must_use]
     pub const fn codec_delay(&self) -> Option<u64> {
         self.codec_delay
     }
 
-    /// After a discontinuity, SeekPreRoll is the duration in nanoseconds of the data the decoder
+    /// After a discontinuity, `SeekPreRoll` is the duration in nanoseconds of the data the decoder
     /// must decode before the decoded data is valid.
     #[must_use]
     pub const fn seek_pre_roll(&self) -> Option<u64> {
@@ -623,7 +623,7 @@ impl Video {
     }
 
     /// Alpha Video Mode. Presence of this Element indicates that the
-    /// BlockAdditional Element could contain Alpha data.
+    /// `BlockAdditional` Element could contain Alpha data.
     #[must_use]
     pub const fn alpha_mode(&self) -> Option<u64> {
         self.alpha_mode
@@ -666,20 +666,20 @@ impl Video {
     }
 
     /// Width of the video frames to display.
-    /// Applies to the video frame after cropping (PixelCrop* Elements).
+    /// Applies to the video frame after cropping (`PixelCrop`* Elements).
     #[must_use]
     pub const fn display_width(&self) -> Option<NonZeroU64> {
         self.display_width
     }
 
     /// Height of the video frames to display.
-    /// Applies to the video frame after cropping (PixelCrop* Elements).
+    /// Applies to the video frame after cropping (`PixelCrop`* Elements).
     #[must_use]
     pub const fn display_height(&self) -> Option<NonZeroU64> {
         self.display_height
     }
 
-    /// How DisplayWidth & DisplayHeight are interpreted.
+    /// How `DisplayWidth` & `DisplayHeight` are interpreted.
     #[must_use]
     pub const fn display_unit(&self) -> Option<DisplayUnit> {
         self.display_unit
@@ -1002,7 +1002,7 @@ impl ContentEncoding {
     ///
     /// 1 - All frame contents, excluding lacing data.
     /// 2 - The track's private data.
-    /// 4 - The next ContentEncoding.
+    /// 4 - The next `ContentEncoding`.
     #[must_use]
     pub const fn scope(&self) -> u64 {
         self.scope
@@ -1913,9 +1913,9 @@ fn parse_seek_head<R: Read + Seek>(
     Ok(seek_head)
 }
 
-/// Seeks the SeekHead element and returns the offset into it when present.
+/// Seeks the `SeekHead` element and returns the offset into it when present.
 ///
-/// The specification states that the first non CRC-32 element should be a SeekHead if present.
+/// The specification states that the first non CRC-32 element should be a `SeekHead` if present.
 fn search_seek_head<R: Read + Seek>(
     r: &mut R,
     segment_data_offset: u64,
@@ -1933,7 +1933,7 @@ fn search_seek_head<R: Read + Seek>(
     }
 }
 
-/// Build a SeekHead by parsing the top level entries.
+/// Build a `SeekHead` by parsing the top level entries.
 fn build_seek_head<R: Read + Seek>(
     r: &mut R,
     segment_data_offset: u64,
@@ -1969,7 +1969,7 @@ fn build_seek_head<R: Read + Seek>(
     Ok(())
 }
 
-/// Tries to find the offset of the first cluster and save it in the SeekHead.
+/// Tries to find the offset of the first cluster and save it in the `SeekHead`.
 fn find_first_cluster_offset<R: Read + Seek>(
     r: &mut R,
     seek_head: &mut HashMap<ElementId, u64>,

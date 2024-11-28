@@ -21,7 +21,7 @@ pub enum MatrixCoefficients {
     Smpte170,
     /// SMPTE 240M.
     Smpte240,
-    /// YCoCg.
+    /// `YCoCg`.
     YCoCg,
     /// BT2020 Non-constant Luminance.
     Bt2020Ncl,
@@ -310,7 +310,7 @@ pub enum Range {
     Broadcast,
     /// Full range (no clipping).
     Full,
-    /// Defined by MatrixCoefficients / TransferCharacteristics.
+    /// Defined by `MatrixCoefficients` / `TransferCharacteristics`.
     Defined,
 }
 

@@ -25,9 +25,9 @@ pub enum DemuxError {
     WrongIntegerSize(u64),
     /// Wrong date size.
     WrongDateSize(u64),
-    /// Unsupported DocType.
+    /// Unsupported `DocType`.
     UnsupportedDocType(String),
-    /// Unsupported DocTypeReadVersion.
+    /// Unsupported `DocTypeReadVersion`.
     UnsupportedDocTypeReadVersion(u64),
     /// Unexpected element found.
     UnexpectedElement((ElementId, ElementId)),
