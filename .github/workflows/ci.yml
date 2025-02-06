@@ -1,0 +1,77 @@
+name: Continuous Integration
+run-name: Run CI on ${{ github.event_name }}
+
+on:
+  push:
+    paths:
+      - ".github/workflows/ci.yml"
+      - "Cargo.*"
+      - "src/**"
+  pull_request:
+    paths:
+      - ".github/workflows/ci.yml"
+      - "Cargo.*"
+      - "src/**"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ci_code_checks_and_tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    name: Code Checks
+
+    steps:
+      - name: "Install rust-toolchain stable"
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain : stable
+          components: clippy, rustfmt
+
+      - name: "Show environment"
+        run: |
+          rustc -vV
+          cargo -vV
+
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Cargo formatting"
+        id: cargo_fmt
+        if: $${{ always() }}
+        run: cargo fmt --all -- --check
+
+      - name: "Cargo clippy"
+        id: cargo_clippy
+        if: $${{ always() }}
+        run: cargo clippy --profile=test
+
+      - name: "Cargo doc"
+        id: cargo_doc
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        if: $${{ always() }}
+        run: cargo doc
+
+      - name: "Some checks failed"
+        if: ${{ failure() }}
+        run: |
+          echo "### :x: Checks Failed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "|Job|Status|" >> $GITHUB_STEP_SUMMARY
+          echo "|---|------|" >> $GITHUB_STEP_SUMMARY
+          echo "|Cargo fmt|${{ steps.cargo_fmt.outcome }}|" >> $GITHUB_STEP_SUMMARY
+          echo "|Cargo clippy|${{ steps.cargo_clippy.outcome }}|" >> $GITHUB_STEP_SUMMARY
+          echo "|Cargo doc|${{ steps.cargo_doc.outcome }}|" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please check the failed jobs and fix where needed." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: "All checks passed"
+        if: ${{ success() }}
+        run: |
+          echo "### :white_check_mark: Checks Passed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
