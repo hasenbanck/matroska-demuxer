@@ -503,7 +503,7 @@ pub(crate) fn parse_variable_u64<R: Read>(r: &mut R) -> Result<u64> {
     let mut bytes = [0u8];
     r.read_exact(&mut bytes)?;
     let size = match bytes[0] {
-        byte if byte == 0xFF => u64::MAX,
+        0xFF => u64::MAX,
         byte if (byte & 0x80) == 0x80 => (0x7F & byte).into(),
         byte if (byte & 0xC0) == 0x40 => parse_variable_u64_data(r, 0x3F & byte, 1)?,
         byte if (byte & 0xE0) == 0x20 => parse_variable_u64_data(r, 0x1F & byte, 2)?,
@@ -511,7 +511,7 @@ pub(crate) fn parse_variable_u64<R: Read>(r: &mut R) -> Result<u64> {
         byte if (byte & 0xF8) == 0x08 => parse_variable_u64_data(r, 0x07 & byte, 4)?,
         byte if (byte & 0xFC) == 0x04 => parse_variable_u64_data(r, 0x03 & byte, 5)?,
         byte if (byte & 0xFE) == 0x02 => parse_variable_u64_data(r, 0x01 & byte, 6)?,
-        byte if byte == 0x01 => parse_variable_u64_data(r, 0, 7)?,
+        0x01 => parse_variable_u64_data(r, 0, 7)?,
         _ => return Err(DemuxError::InvalidEbmlDataSize),
     };
     Ok(size)
