@@ -1495,6 +1495,10 @@ pub struct MatroskaFile<R: Read + Seek> {
 
 impl<R: Read + Seek> MatroskaFile<R> {
     /// Opens a Matroska file.
+    ///
+    /// # Errors
+    ///
+    /// Will return the [`DemuxError`] associated with the problem encountered.
     pub fn open(mut file: R) -> Result<Self> {
         let ebml_header = parse_ebml_header(&mut file)?;
 
@@ -1599,6 +1603,10 @@ impl<R: Read + Seek> MatroskaFile<R> {
     /// Reads the next frame data into the given `Frame`.
     ///
     /// Returns `false` if the end of the file is reached.
+    ///
+    /// # Errors
+    ///
+    /// Will return the [`DemuxError`] associated with the problem encountered.
     pub fn next_frame(&mut self, frame: &mut Frame) -> Result<bool> {
         if self.try_pop_frame(frame)? {
             return Ok(true);
@@ -1686,6 +1694,10 @@ impl<R: Read + Seek> MatroskaFile<R> {
     /// Seek operations will use `Cues` inside the file for faster seek operation. If no `Cues` are
     /// present, this function will do a linear search through all clusters / blocks until the first
     /// frame after the given timestamp is found.
+    ///
+    /// # Errors
+    ///
+    /// Will return the [`DemuxError`] associated with the problem encountered.
     pub fn seek(&mut self, seek_timestamp: u64) -> Result<()> {
         self.cluster_timestamp = 0;
         self.queued_frames.clear();
