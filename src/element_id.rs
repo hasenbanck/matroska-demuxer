@@ -314,7 +314,7 @@ static ID_TO_ELEMENT_ID: OnceLock<HashMap<u32, ElementId>> = OnceLock::new();
 pub(crate) fn id_to_element_id(id: u32) -> ElementId {
     let mapping = ID_TO_ELEMENT_ID.get_or_init(|| {
         let mut m = HashMap::with_capacity(144);
-        m.insert(0x1A45DFA3, ElementId::Ebml);
+        m.insert(0x1A45_DFA3, ElementId::Ebml);
         m.insert(0x4286, ElementId::EbmlVersion);
         m.insert(0x42F7, ElementId::EbmlReadVersion);
         m.insert(0x42F2, ElementId::EbmlMaxIdLength);
@@ -324,19 +324,19 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x4285, ElementId::DocTypeReadVersion);
         m.insert(0xBF, ElementId::Crc32);
         m.insert(0xEC, ElementId::Void);
-        m.insert(0x18538067, ElementId::Segment);
-        m.insert(0x114D9B74, ElementId::SeekHead);
+        m.insert(0x1853_8067, ElementId::Segment);
+        m.insert(0x114D_9B74, ElementId::SeekHead);
         m.insert(0x4DBB, ElementId::Seek);
         m.insert(0x53AB, ElementId::SeekId);
         m.insert(0x53AC, ElementId::SeekPosition);
-        m.insert(0x1549A966, ElementId::Info);
-        m.insert(0x2AD7B1, ElementId::TimestampScale);
+        m.insert(0x1549_A966, ElementId::Info);
+        m.insert(0x2A_D7B1, ElementId::TimestampScale);
         m.insert(0x4489, ElementId::Duration);
         m.insert(0x4461, ElementId::DateUtc);
         m.insert(0x7BA9, ElementId::Title);
         m.insert(0x4D80, ElementId::MuxingApp);
         m.insert(0x5741, ElementId::WritingApp);
-        m.insert(0x1F43B675, ElementId::Cluster);
+        m.insert(0x1F43_B675, ElementId::Cluster);
         m.insert(0xE7, ElementId::Timestamp);
         m.insert(0xAB, ElementId::PrevSize);
         m.insert(0xA3, ElementId::SimpleBlock);
@@ -349,7 +349,7 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x9B, ElementId::BlockDuration);
         m.insert(0xFB, ElementId::ReferenceBlock);
         m.insert(0x75A2, ElementId::DiscardPadding);
-        m.insert(0x1654AE6B, ElementId::Tracks);
+        m.insert(0x1654_AE6B, ElementId::Tracks);
         m.insert(0xAE, ElementId::TrackEntry);
         m.insert(0xD7, ElementId::TrackNumber);
         m.insert(0x73C5, ElementId::TrackUid);
@@ -363,12 +363,12 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x55AE, ElementId::FlagOriginal);
         m.insert(0x55AF, ElementId::FlagCommentary);
         m.insert(0x9C, ElementId::FlagLacing);
-        m.insert(0x23E383, ElementId::DefaultDuration);
+        m.insert(0x0023_E383, ElementId::DefaultDuration);
         m.insert(0x536E, ElementId::Name);
-        m.insert(0x22B59C, ElementId::Language);
+        m.insert(0x22_B59C, ElementId::Language);
         m.insert(0x86, ElementId::CodecId);
         m.insert(0x63A2, ElementId::CodecPrivate);
-        m.insert(0x258688, ElementId::CodecName);
+        m.insert(0x25_8688, ElementId::CodecName);
         m.insert(0x56AA, ElementId::CodecDelay);
         m.insert(0x56BB, ElementId::SeekPreRoll);
         m.insert(0xE0, ElementId::Video);
@@ -425,7 +425,7 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x55D8, ElementId::WhitePointChromaticityY);
         m.insert(0x55D9, ElementId::LuminanceMax);
         m.insert(0x55DA, ElementId::LuminanceMin);
-        m.insert(0x1C53BB6B, ElementId::Cues);
+        m.insert(0x1C53_BB6B, ElementId::Cues);
         m.insert(0xBB, ElementId::CuePoint);
         m.insert(0xB3, ElementId::CueTime);
         m.insert(0xB7, ElementId::CueTrackPositions);
@@ -434,7 +434,7 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0xF0, ElementId::CueRelativePosition);
         m.insert(0xB2, ElementId::CueDuration);
         m.insert(0x5378, ElementId::CueBlockNumber);
-        m.insert(0x1043A770, ElementId::Chapters);
+        m.insert(0x1043_A770, ElementId::Chapters);
         m.insert(0x45B9, ElementId::EditionEntry);
         m.insert(0xB6, ElementId::ChapterAtom);
         m.insert(0x73C4, ElementId::ChapterUid);
@@ -446,7 +446,7 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x437C, ElementId::ChapLanguage);
         m.insert(0x437D, ElementId::ChapLanguageIetf);
         m.insert(0x437E, ElementId::ChapCountry);
-        m.insert(0x1254C367, ElementId::Tags);
+        m.insert(0x1254_C367, ElementId::Tags);
         m.insert(0x7373, ElementId::Tag);
         m.insert(0x63C0, ElementId::Targets);
         m.insert(0x68CA, ElementId::TargetTypeValue);

@@ -215,7 +215,7 @@ impl<R: Read + Seek> ParsableElement<R> for Info {
     type Output = Self;
 
     fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
-        let timestamp_scale = find_nonzero_or(fields, ElementId::TimestampScale, 1000000)?;
+        let timestamp_scale = find_nonzero_or(fields, ElementId::TimestampScale, 1_000_000)?;
         let duration = try_find_float(fields, ElementId::Duration)?;
         let date_utc = try_find_date(fields, ElementId::DateUtc)?;
         let title = try_find_string(fields, ElementId::Title)?;

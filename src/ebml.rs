@@ -487,10 +487,10 @@ pub(crate) fn parse_variable_i64<R: Read>(r: &mut R) -> Result<i64> {
                 i64::from(parse_variable_u32_data(r, 0x3F & byte, 1)?).saturating_sub(8191)
             }
             byte if (byte & 0xE0) == 0x20 => {
-                i64::from(parse_variable_u32_data(r, 0x1F & byte, 2)?).saturating_sub(1048575)
+                i64::from(parse_variable_u32_data(r, 0x1F & byte, 2)?).saturating_sub(1_048_575)
             }
             byte if (byte & 0xF0) == 0x10 => {
-                i64::from(parse_variable_u32_data(r, 0x0F & byte, 3)?).saturating_sub(134217727)
+                i64::from(parse_variable_u32_data(r, 0x0F & byte, 3)?).saturating_sub(134_217_727)
             }
             _ => return Err(DemuxError::InvalidEbmlElementId),
         };
@@ -691,7 +691,7 @@ mod tests {
         let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
-            assert!((x - 3312.1312312).abs() < 0.00001)
+            assert!((x - 3_312.131_231_2).abs() < 0.00001)
         } else {
             panic!("parse_element returned the wrong element type");
         }
