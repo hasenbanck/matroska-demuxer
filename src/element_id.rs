@@ -468,7 +468,7 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
 pub(crate) enum ElementType {
     /// Unknown element.
     Unknown,
-    /// An element that contains other elements als children.
+    /// An element that contains other elements as children.
     Master,
     /// Unsigned integer.
     Unsigned,
