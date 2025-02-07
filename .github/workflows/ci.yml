@@ -56,6 +56,29 @@ jobs:
         if: $${{ always() }}
         run: cargo doc
 
+      - name: Cache Matroska_test_files
+        id: cache-mkv-test-files
+        if: $${{ always() }}
+        uses: actions/cache@v4
+        with:
+          key: mkv-test-files # static key, no variant needed
+          path: tests/data/test*.mkv
+
+
+      - name: Download test files
+        if: ${{ always() && steps.cache-mkv-test-files.outputs.cache-hit != 'true' }}
+        run : |
+          FILE_NAME=matroska_test_w1_1.zip
+          echo "Downloading file ${FILE_NAME}"
+          wget --progress=dot:mega "https://sourceforge.net/projects/matroska/files/test_files/${FILE_NAME}"
+          unzip -o "${FILE_NAME}" -d tests/data *.mkv
+          rm ${FILE_NAME}
+
+      - name: "Cargo test"
+        id: cargo_test
+        if: $${{ always() }}
+        run: cargo test
+
       - name: "Some checks failed"
         if: ${{ failure() }}
         run: |
@@ -66,6 +89,7 @@ jobs:
           echo "|Cargo fmt|${{ steps.cargo_fmt.outcome }}|" >> $GITHUB_STEP_SUMMARY
           echo "|Cargo clippy|${{ steps.cargo_clippy.outcome }}|" >> $GITHUB_STEP_SUMMARY
           echo "|Cargo doc|${{ steps.cargo_doc.outcome }}|" >> $GITHUB_STEP_SUMMARY
+          echo "|Cargo test|${{ steps.cargo_test.outcome }}|" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Please check the failed jobs and fix where needed." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
