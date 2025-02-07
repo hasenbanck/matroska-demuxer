@@ -98,6 +98,51 @@ pub fn parse_hdr_mkv() {
 }
 
 #[test]
+pub fn parse_multi_seekhead_mkv() {
+    let file = File::open("tests/data/multi_seekhead.mkv").unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
+
+    let info = mkv.info();
+    assert_eq!(info.title(), Some("Big Buck Bunny"));
+
+    let chapters = mkv.chapters().unwrap()[0].chapter_atoms();
+    assert_eq!(chapters[0].uid().get(), 1067995727130785153);
+    assert_eq!(chapters[0].time_start(), 0);
+    assert_eq!(chapters[0].time_end(), None);
+    assert_eq!(chapters[0].displays()[0].string(), "Intro");
+    assert_eq!(chapters[0].displays()[0].language(), None);
+    assert_eq!(chapters[0].displays()[0].language_ietf(), Some("en"));
+    assert_eq!(chapters[0].displays()[0].country(), None);
+
+    let tags = mkv.tags().unwrap();
+    assert_eq!(tags[0].simple_tags()[0].name(), "ENCODER");
+    assert_eq!(tags[0].simple_tags()[0].string().unwrap(), "Lavf58.76.100");
+
+    let tracks = mkv.tracks();
+    assert_eq!(tracks[0].name(), None);
+    assert_eq!(tracks[1].name(), Some("Original"));
+
+    let mut frame = Frame::default();
+
+    let mut count = 0;
+    while mkv.next_frame(&mut frame).unwrap() {
+        count += 1;
+    }
+    assert_eq!(count, 74);
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 0);
+
+    mkv.seek(3).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 3);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
+}
+
+#[test]
 pub fn parse_test1_mkv() {
     let file = File::open("tests/data/test1.mkv").unwrap();
     let mut mkv = MatroskaFile::open(file).unwrap();
