@@ -82,6 +82,10 @@ pub struct Frame {
     ///
     /// Only set for files that use simple blocks.
     pub is_discardable: Option<bool>,
+    /// The duration associated with the frame.
+    ///
+    /// Used when there is a break in a track like for subtitle tracks.
+    pub duration: Option<u64>,
 }
 
 impl From<Vec<u8>> for Frame {
@@ -1508,13 +1512,18 @@ impl<R: Read + Seek> MatroskaFile<R> {
             return Ok(true);
         };
 
-        // Search for the next block.
+        // Search for the next block and read it.
+        let mut block_end = None;
         loop {
             match next_element(&mut self.file) {
                 Ok((element_id, element_data)) => match element_id {
                     // We enter cluster and block groups.
-                    ElementId::Cluster | ElementId::BlockGroup => {
+                    ElementId::Cluster => {
                         self.enter_data_location(&element_data)?;
+                    }
+                    ElementId::BlockGroup => {
+                        let block_size = self.enter_data_location(&element_data)?;
+                        block_end = Some(self.file.stream_position()? + block_size);
                     }
                     // Update the current cluster timestamp.
                     ElementId::Timestamp => {
@@ -1526,7 +1535,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
                     }
                     // Parse the block data.
                     ElementId::SimpleBlock | ElementId::Block => {
-                        return if let ElementData::Location {
+                        if let ElementData::Location {
                             offset: header_start,
                             size: block_size,
                         } = element_data
@@ -1543,10 +1552,20 @@ impl<R: Read + Seek> MatroskaFile<R> {
                             )?;
                             self.try_pop_frame(frame)?;
 
-                            Ok(true)
+                            // If simple block, set end of block to current position, to go out of the loop
+                            block_end.get_or_insert(self.file.stream_position()?);
                         } else {
-                            Err(DemuxError::UnexpectedDataType)
+                            return Err(DemuxError::UnexpectedDataType);
                         };
+                    }
+                    ElementId::BlockDuration => {
+                        if let ElementData::Unsigned(duration) = element_data {
+                            if let Some(previous) = frame.duration.replace(duration) {
+                                return Err(DemuxError::FrameAlreadyHasDuration(previous));
+                            }
+                        } else {
+                            return Err(DemuxError::UnexpectedDataType);
+                        }
                     }
                     _ => { /* We ignore all other elements */ }
                 },
@@ -1561,6 +1580,20 @@ impl<R: Read + Seek> MatroskaFile<R> {
                     return Err(err);
                 }
             }
+
+            // Manage the end of the loop. Return true if :
+            // - a SimpleBlock found and read
+            // - a BlockGroup found and read to the end. This happens when it contains one Block (frame) + BlockDuration.
+            // - a BlockGroup found with laced frames decoded and pushed in queued_frames.
+            //   The first frame should have been popped in `frame` and other frames waiting in `queued_frames`
+            let block_ended = if let Some(val) = block_end {
+                val == self.file.stream_position()?
+            } else {
+                false
+            };
+            if block_ended || !self.queued_frames.is_empty() {
+                return Ok(true);
+            }
         }
     }
 
@@ -1572,6 +1605,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
             frame.is_discardable = queued_frame.is_discardable;
             frame.is_invisible = queued_frame.is_invisible;
             frame.is_keyframe = queued_frame.is_keyframe;
+            frame.duration = None; // Clean duration, as it's reported in different block than other frame content
 
             let size: usize = queued_frame.size.try_into()?;
             frame.data.resize(size, 0_u8);
@@ -1606,10 +1640,11 @@ impl<R: Read + Seek> MatroskaFile<R> {
         self.seek_narrow_phase(seek_timestamp)
     }
 
-    fn enter_data_location(&mut self, element_data: &ElementData) -> Result<()> {
-        if let ElementData::Location { offset, .. } = element_data {
+    // Return the data size for use by the caller
+    fn enter_data_location(&mut self, element_data: &ElementData) -> Result<u64> {
+        if let ElementData::Location { offset, size } = element_data {
             self.file.seek(SeekFrom::Start(*offset))?;
-            Ok(())
+            Ok(*size)
         } else {
             Err(DemuxError::UnexpectedDataType)
         }
