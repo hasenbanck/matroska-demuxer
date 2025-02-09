@@ -41,6 +41,8 @@ pub enum DemuxError {
     NonZeroValueIsZero(ElementId),
     /// A value that should be positive is not positive.
     PositiveValueIsNotPositive,
+    /// A value for duration is already set for this frame, only one BlockDuration is prelevant for one frame.
+    FrameAlreadyHasDuration(u64),
 }
 
 impl std::fmt::Display for DemuxError {
@@ -116,6 +118,12 @@ impl std::fmt::Display for DemuxError {
             }
             DemuxError::PositiveValueIsNotPositive => {
                 write!(f, "a value that should be positive is not positive")
+            }
+            DemuxError::FrameAlreadyHasDuration(previous_duration) => {
+                write!(
+                    f,
+                    "a duration `{previous_duration}` is already set for current Frame"
+                )
             }
         }
     }
