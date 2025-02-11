@@ -143,6 +143,71 @@ pub fn parse_multi_seekhead_mkv() {
 }
 
 #[test]
+pub fn parse_subtitle_mkv() {
+    let file = File::open("tests/data/subtitles.mkv").unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
+
+    let info = mkv.info();
+    assert_eq!(info.title(), Some("Big Buck Bunny"));
+
+    let tracks = mkv.tracks();
+    assert_eq!(tracks[0].name(), None);
+    assert_eq!(tracks[1].name(), None);
+    assert_eq!(tracks[1].codec_id(), "S_TEXT/UTF8");
+    assert_eq!(tracks[1].language(), None);
+    assert!(tracks[1].flag_default());
+    assert_eq!(tracks[2].name(), None);
+    assert_eq!(tracks[2].codec_id(), "S_TEXT/UTF8");
+    assert_eq!(tracks[2].language(), Some("fre"));
+    assert!(!tracks[2].flag_default());
+
+    let mut frame = Frame::default();
+
+    let mut count = 0;
+    let mut sub_idx = 0;
+    while mkv.next_frame(&mut frame).unwrap() {
+        if (frame.track == 2 || frame.track == 3) && sub_idx < 2 {
+            sub_idx += 1;
+            assert_eq!(frame.timestamp, 580);
+            assert_eq!(frame.duration, Some(1820));
+            assert_eq!(
+                std::str::from_utf8(&frame.data).unwrap(),
+                "<i>Big Buck Bunny</i>"
+            );
+        } else if frame.track == 2 && sub_idx == 2 {
+            assert_eq!(frame.timestamp, 2540);
+            assert_eq!(frame.duration, Some(2220));
+            let frame_content = std::str::from_utf8(&frame.data).unwrap();
+            assert_eq!(
+                frame_content,
+                "An animated comedy short film\r\nmade by the Blender Institute."
+            );
+        } else if frame.track == 3 && sub_idx == 2 {
+            assert_eq!(frame.timestamp, 2540);
+            assert_eq!(frame.duration, Some(2220));
+            let frame_content = std::str::from_utf8(&frame.data).unwrap();
+            assert_eq!(
+                frame_content,
+                "Un court métrage d'annimation\r\ncréer par le Blender Institute."
+            );
+        }
+        count += 1;
+    }
+    assert_eq!(count, 154);
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 0);
+
+    mkv.seek(3).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 40); // The second frame is at 40ms
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
+}
+
+#[test]
 pub fn parse_test1_mkv() {
     let file = File::open("tests/data/test1.mkv").unwrap();
     let mut mkv = MatroskaFile::open(file).unwrap();
