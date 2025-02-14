@@ -1416,7 +1416,7 @@ impl<R: Read + Seek> MatroskaFile<R> {
         }
 
         if !seek_head.contains_key(&ElementId::Cluster) {
-            find_first_cluster_offset(&mut file, &mut seek_head)?;
+            find_first_cluster_offset(&mut file, segment_data_offset, &mut seek_head)?;
         }
 
         let info = parse_segment_info(&mut file, &seek_head)?;
@@ -1932,15 +1932,12 @@ fn build_seek_head<R: Read + Seek>(
 /// Tries to find the offset of the first cluster and save it in the SeekHead.
 fn find_first_cluster_offset<R: Read + Seek>(
     r: &mut R,
+    segment_data_offset: u64,
     seek_head: &mut HashMap<ElementId, u64>,
 ) -> Result<()> {
-    let (tracks_offset, tracks_size) = if let Some(offset) = seek_head.get(&ElementId::Tracks) {
-        expect_master(r, ElementId::Tracks, Some(*offset))?
-    } else {
-        return Err(DemuxError::CantFindCluster);
-    };
-
-    r.seek(SeekFrom::Start(tracks_offset + tracks_size))?;
+    // There is no guarantee about the order of the `Top-Level Elements`,
+    // so search from the segment data offset.
+    r.seek(SeekFrom::Start(segment_data_offset))?;
     loop {
         let position = r.stream_position()?;
 
