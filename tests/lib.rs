@@ -143,6 +143,68 @@ pub fn parse_multi_seekhead_mkv() {
 }
 
 #[test]
+pub fn parse_no_cluster_position_mkv() {
+    let file = File::open("tests/data/no_cluster_position.mkv").unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
+
+    let info = mkv.info();
+    assert_eq!(
+        info.title(),
+        Some("no cluster in seekhead and Tracks after Cluster")
+    );
+
+    let tracks = mkv.tracks();
+    assert_eq!(tracks[0].name(), None);
+    assert_eq!(tracks[1].name(), None);
+    assert_eq!(tracks[2].language(), None);
+    assert_eq!(
+        tracks[2].name(),
+        Some("Big Buck Bunny (code-named Project Peach) is a 2008 animated comedy short film featuring animals of the forest, made by the Blender Institute, part of the Blender Foundation. Like the foundation's previous film, Elephants Dream, the film was made using Blender, a free and open-source software application for 3D computer modeling and animation developed by the same foundation.")
+    );
+    assert_eq!(tracks[3].language(), Some("cze"));
+    assert_eq!(
+        tracks[3].name(),
+        Some("Big Buck Bunny je krátký animovaný film z institutu Blender, části nadace Blender.")
+    );
+    assert_eq!(tracks[4].language(), Some("ger"));
+    assert_eq!(
+        tracks[4].name(),
+        Some("Big Buck Bunny ist ein computergenerierter Kurzfilm, der hauptsächlich unter Verwendung von freier Software hergestellt wurde, insbesondere der 3D-Grafiksoftware Blender.")
+    );
+    assert_eq!(tracks[5].language(), Some("fre"));
+    assert_eq!(
+        tracks[5].name(),
+        Some("Ce film s'inscrit dans la lignée directe du court-métrage Elephants Dream, produit en 2005-2006. Orchestré une nouvelle fois par la Fondation Blender sous le nom de projet pêche, il vise à produire un court métrage exclusivement avec des logiciels libres dont principalement Blender.")
+    );
+    assert_eq!(tracks[6].language(), Some("por"));
+    assert_eq!(tracks[6].name(), None);
+    assert_eq!(tracks[7].language(), Some("spa"));
+    assert_eq!(
+        tracks[7].name(),
+        Some("Big Buck Bunny es un corto animado del Instituto Blender; el cual es parte de la Fundación Blender.\u{200b} Como la película previa de la fundación, Elephants Dream, esta película se ha realizado usando software libre. El trabajo comenzó en octubre de 2007 y la película se estrenó del 10 de abril de 2008 en Ámsterdam.")
+    );
+
+    let mut frame = Frame::default();
+
+    let mut count = 0;
+    while mkv.next_frame(&mut frame).unwrap() {
+        count += 1;
+    }
+    assert_eq!(count, 80);
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 0);
+
+    mkv.seek(3).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 3);
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
+}
+
+#[test]
 pub fn parse_subtitle_mkv() {
     let file = File::open("tests/data/subtitles.mkv").unwrap();
     let mut mkv = MatroskaFile::open(file).unwrap();
