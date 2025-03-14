@@ -282,9 +282,13 @@ pub struct TrackEntry {
     track_uid: NonZeroU64,
     track_type: TrackType,
     flag_enabled: bool,
+    flag_commentary: bool,
     flag_default: bool,
     flag_forced: bool,
+    flag_hearing_impaired: bool,
     flag_lacing: bool,
+    flag_original: bool,
+    flag_visual_impaired: bool,
     default_duration: Option<NonZeroU64>,
     name: Option<String>,
     language: Option<String>,
@@ -306,9 +310,13 @@ impl<R: Read + Seek> ParsableElement<R> for TrackEntry {
         let track_uid = find_nonzero(fields, ElementId::TrackUid)?;
         let track_type = find_custom_type(fields, ElementId::TrackType)?;
         let flag_enabled = find_bool_or(fields, ElementId::FlagEnabled, true)?;
+        let flag_commentary = find_bool_or(fields, ElementId::FlagCommentary, false)?;
         let flag_default = find_bool_or(fields, ElementId::FlagDefault, true)?;
         let flag_forced = find_bool_or(fields, ElementId::FlagForced, false)?;
+        let flag_hearing_impaired = find_bool_or(fields, ElementId::FlagHearingImpaired, false)?;
         let flag_lacing = find_bool_or(fields, ElementId::FlagLacing, false)?;
+        let flag_original = find_bool_or(fields, ElementId::FlagOriginal, false)?;
+        let flag_visual_impaired = find_bool_or(fields, ElementId::FlagVisualImpaired, false)?;
         let default_duration = try_find_nonzero(fields, ElementId::DefaultDuration)?;
         let name = try_find_string(fields, ElementId::Name)?;
         let language = try_find_string(fields, ElementId::Language)?;
@@ -333,9 +341,13 @@ impl<R: Read + Seek> ParsableElement<R> for TrackEntry {
             track_uid,
             track_type,
             flag_enabled,
+            flag_commentary,
             flag_default,
             flag_forced,
+            flag_hearing_impaired,
             flag_lacing,
+            flag_original,
+            flag_visual_impaired,
             default_duration,
             name,
             language,
@@ -379,6 +391,11 @@ impl TrackEntry {
         self.flag_default
     }
 
+    /// Set if and only if that track contains commentary.
+    pub fn flag_commentary(&self) -> bool {
+        self.flag_commentary
+    }
+
     /// Applies only to subtitles. Set if that track should be eligible for automatic selection
     /// by the player if it matches the user's language preference, even if the user's preferences
     /// would normally not enable subtitles with the selected audio track.
@@ -386,9 +403,24 @@ impl TrackEntry {
         self.flag_forced
     }
 
+    /// Set if and only if that track is suitable for users with hearing impairments.
+    pub fn flag_hearing_impaired(&self) -> bool {
+        self.flag_hearing_impaired
+    }
+
     /// Indicates if the track may contain blocks using lacing.
     pub fn flag_lacing(&self) -> bool {
         self.flag_lacing
+    }
+
+    /// Set if and only if that track is in the content's original language.
+    pub fn flag_original(&self) -> bool {
+        self.flag_original
+    }
+
+    /// Set if and only if that track is suitable for users with visual impairments.
+    pub fn flag_visual_impaired(&self) -> bool {
+        self.flag_visual_impaired
     }
 
     /// Number of nanoseconds (not scaled via TimestampScale) per frame (one Element put into a (Simple)Block).
