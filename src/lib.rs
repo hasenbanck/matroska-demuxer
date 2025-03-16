@@ -258,10 +258,7 @@ impl Info {
 
     /// General name of the Segment.
     pub fn title(&self) -> Option<&str> {
-        match self.title.as_ref() {
-            None => None,
-            Some(title) => Some(title),
-        }
+        self.title.as_deref()
     }
 
     /// Muxing application or library.
@@ -433,10 +430,7 @@ impl TrackEntry {
 
     /// A human-readable track name.
     pub fn name(&self) -> Option<&str> {
-        match self.name.as_ref() {
-            None => None,
-            Some(name) => Some(name),
-        }
+        self.name.as_deref()
     }
 
     /// Specifies the language of the track.
@@ -445,10 +439,7 @@ impl TrackEntry {
     /// language code followed by a dash and a country code for specialities in languages
     /// (like `fre-ca` for Canadian French).
     pub fn language(&self) -> Option<&str> {
-        match self.language.as_ref() {
-            None => None,
-            Some(language) => Some(language),
-        }
+        self.language.as_deref()
     }
 
     /// Specifies the language of the track as IETF language tag.
@@ -457,10 +448,7 @@ impl TrackEntry {
     /// language element used in Matroska 1-3. If a BCF47 language element is present the regular
     /// language element must be ignored.
     pub fn language_bcp47(&self) -> Option<&str> {
-        match self.language_bcp47.as_ref() {
-            None => None,
-            Some(language) => Some(language),
-        }
+        self.language_bcp47.as_deref()
     }
 
     /// An ID corresponding to the codec.
@@ -470,18 +458,12 @@ impl TrackEntry {
 
     /// Private data only known to the codec.
     pub fn codec_private(&self) -> Option<&[u8]> {
-        match self.codec_private.as_ref() {
-            None => None,
-            Some(data) => Some(data),
-        }
+        self.codec_private.as_deref()
     }
 
     /// A human-readable string specifying the codec.
     pub fn codec_name(&self) -> Option<&str> {
-        match self.codec_name.as_ref() {
-            None => None,
-            Some(codec_name) => Some(codec_name),
-        }
+        self.codec_name.as_deref()
     }
 
     /// CodecDelay is ehe codec-built-in delay in nanoseconds.
@@ -1043,10 +1025,7 @@ impl ContentEncryption {
 
     /// The encryption algorithm used.
     pub fn key_id(&self) -> Option<&[u8]> {
-        match self.key_id.as_ref() {
-            None => None,
-            Some(key_id) => Some(key_id),
-        }
+        self.key_id.as_deref()
     }
 
     /// The encryption algorithm used.
@@ -1145,10 +1124,7 @@ impl ChapterAtom {
 
     /// A unique string ID to identify the Chapter.
     pub fn string_uid(&self) -> Option<&str> {
-        match self.string_uid.as_ref() {
-            None => None,
-            Some(string_uid) => Some(string_uid),
-        }
+        self.string_uid.as_deref()
     }
 
     /// Timestamp of the start of Chapter.
@@ -1202,27 +1178,18 @@ impl ChapterDisplay {
 
     /// The languages corresponding to the string, in the bibliographic ISO-639-2 form.
     pub fn language(&self) -> Option<&str> {
-        match self.language.as_ref() {
-            None => None,
-            Some(language) => Some(language),
-        }
+        self.language.as_deref()
     }
 
     /// Specifies the language according to BCP47 and using the IANA Language Subtag Registry.
     pub fn language_ietf(&self) -> Option<&str> {
-        match self.language_ietf.as_ref() {
-            None => None,
-            Some(language_ietf) => Some(language_ietf),
-        }
+        self.language_ietf.as_deref()
     }
 
     /// The countries corresponding to the string, same 2 octets country-codes as in
     /// Internet domains based on ISO3166-1 alpha-2 codes.
     pub fn country(&self) -> Option<&str> {
-        match self.country.as_ref() {
-            None => None,
-            Some(country) => Some(country),
-        }
+        self.country.as_deref()
     }
 }
 
@@ -1335,10 +1302,7 @@ impl SimpleTag {
 
     /// Specifies the language of the tag.
     pub fn language(&self) -> Option<&str> {
-        match self.language.as_ref() {
-            None => None,
-            Some(language) => Some(language),
-        }
+        self.language.as_deref()
     }
 
     /// Indicate if this is the default/original language to use for the given tag.
@@ -1348,18 +1312,12 @@ impl SimpleTag {
 
     /// The value of the tag, if it is a string.
     pub fn string(&self) -> Option<&str> {
-        match self.string.as_ref() {
-            None => None,
-            Some(string) => Some(string),
-        }
+        self.string.as_deref()
     }
 
     /// The value of the tag, if it is binary.
     pub fn binary(&self) -> Option<&[u8]> {
-        match self.binary.as_ref() {
-            None => None,
-            Some(binary) => Some(binary),
-        }
+        self.binary.as_deref()
     }
 }
 
@@ -1540,19 +1498,13 @@ impl<R: Read + Seek> MatroskaFile<R> {
 
     /// Returns the chapters of the file.
     pub fn chapters(&self) -> Option<&[EditionEntry]> {
-        match self.chapters.as_ref() {
-            None => None,
-            Some(chapters) => Some(chapters),
-        }
+        self.chapters.as_deref()
     }
 
     /// Element containing metadata describing tracks, editions,
     /// chapters, attachments, or the segment as a whole.
     pub fn tags(&self) -> Option<&[Tag]> {
-        match self.tags.as_ref() {
-            None => None,
-            Some(tags) => Some(tags),
-        }
+        self.tags.as_deref()
     }
 
     /// Reads the next frame data into the given `Frame`.
