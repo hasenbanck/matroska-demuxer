@@ -292,6 +292,7 @@ pub struct TrackEntry {
     default_duration: Option<NonZeroU64>,
     name: Option<String>,
     language: Option<String>,
+    language_bcp47: Option<String>,
     codec_id: String,
     codec_private: Option<Vec<u8>>,
     codec_name: Option<String>,
@@ -320,6 +321,7 @@ impl<R: Read + Seek> ParsableElement<R> for TrackEntry {
         let default_duration = try_find_nonzero(fields, ElementId::DefaultDuration)?;
         let name = try_find_string(fields, ElementId::Name)?;
         let language = try_find_string(fields, ElementId::Language)?;
+        let language_bcp47 = try_find_string(fields, ElementId::LanguageBcp47)?;
         let codec_id = find_string(fields, ElementId::CodecId)?;
         let codec_private = try_find_binary(r, fields, ElementId::CodecPrivate)?;
         let codec_name = try_find_string(fields, ElementId::CodecName)?;
@@ -351,6 +353,7 @@ impl<R: Read + Seek> ParsableElement<R> for TrackEntry {
             default_duration,
             name,
             language,
+            language_bcp47,
             codec_id,
             codec_private,
             codec_name,
@@ -437,8 +440,24 @@ impl TrackEntry {
     }
 
     /// Specifies the language of the track.
+    ///
+    /// Can be either the 3 letters bibliographic ISO-639-2 form (like `fre` for french), or such a
+    /// language code followed by a dash and a country code for specialities in languages
+    /// (like `fre-ca` for Canadian French).
     pub fn language(&self) -> Option<&str> {
         match self.language.as_ref() {
+            None => None,
+            Some(language) => Some(language),
+        }
+    }
+
+    /// Specifies the language of the track as IETF language tag.
+    ///
+    /// Starting with Matroska 4 the BCF47 language code is recommended instead of the regular
+    /// language element used in Matroska 1-3. If a BCF47 language element is present the regular
+    /// language element must be ignored.
+    pub fn language_bcp47(&self) -> Option<&str> {
+        match self.language_bcp47.as_ref() {
             None => None,
             Some(language) => Some(language),
         }
