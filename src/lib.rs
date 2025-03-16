@@ -922,13 +922,23 @@ impl MasteringMetadata {
     }
 }
 
+/// Store content encoding information
+#[derive(Clone, Debug)]
+pub enum ContentEncodingValue {
+    /// Other encoding not handled.
+    Unknown,
+    /// Indicate than content is compressed.
+    Compression,
+    /// Indicate than content is encrypted.
+    Encryption(ContentEncryption),
+}
+
 /// Settings for one content encoding like compression or encryption.
 #[derive(Clone, Debug)]
 pub struct ContentEncoding {
     order: u64,
     scope: u64,
-    encoding_type: ContentEncodingType,
-    encryption: Option<ContentEncryption>,
+    encoding: ContentEncodingValue,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for ContentEncoding {
@@ -944,14 +954,20 @@ impl<R: Read + Seek> ParsableElement<R> for ContentEncoding {
             ContentEncodingType::Compression,
         )?;
 
-        let encryption =
-            try_parse_child::<_, ContentEncryption>(r, fields, ElementId::ContentEncryption)?;
+        let encoding = match encoding_type {
+            ContentEncodingType::Unknown => ContentEncodingValue::Unknown,
+            ContentEncodingType::Compression => ContentEncodingValue::Compression,
+            ContentEncodingType::Encryption => {
+                let encryption =
+                    parse_child::<_, ContentEncryption>(r, fields, ElementId::ContentEncryption)?;
+                ContentEncodingValue::Encryption(encryption)
+            }
+        };
 
         Ok(Self {
             order,
             scope,
-            encoding_type,
-            encryption,
+            encoding,
         })
     }
 }
@@ -976,12 +992,16 @@ impl ContentEncoding {
 
     /// Describes what kind of transformation is applied.
     pub fn encoding_type(&self) -> ContentEncodingType {
-        self.encoding_type
+        match &self.encoding {
+            ContentEncodingValue::Unknown => ContentEncodingType::Unknown,
+            ContentEncodingValue::Compression => ContentEncodingType::Compression,
+            ContentEncodingValue::Encryption(_) => ContentEncodingType::Encryption,
+        }
     }
 
-    /// Settings describing the encryption used.
-    pub fn encryption(&self) -> Option<&ContentEncryption> {
-        self.encryption.as_ref()
+    /// Return what kind of transformation is applied.
+    pub fn encoding(&self) -> &ContentEncodingValue {
+        &self.encoding
     }
 }
 
