@@ -60,6 +60,7 @@ pub enum ElementId {
     DefaultDuration,
     Name,
     Language,
+    LanguageBcp47,
     CodecId,
     CodecPrivate,
     CodecName,
@@ -212,6 +213,7 @@ pub(crate) fn element_id_to_type(id: ElementId) -> ElementType {
         m.insert(ElementId::DefaultDuration, ElementType::Unsigned);
         m.insert(ElementId::Name, ElementType::String);
         m.insert(ElementId::Language, ElementType::String);
+        m.insert(ElementId::LanguageBcp47, ElementType::String);
         m.insert(ElementId::CodecId, ElementType::String);
         m.insert(ElementId::CodecPrivate, ElementType::Binary);
         m.insert(ElementId::CodecName, ElementType::String);
@@ -366,6 +368,7 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x23E383, ElementId::DefaultDuration);
         m.insert(0x536E, ElementId::Name);
         m.insert(0x22B59C, ElementId::Language);
+        m.insert(0x22B59D, ElementId::LanguageBcp47);
         m.insert(0x86, ElementId::CodecId);
         m.insert(0x63A2, ElementId::CodecPrivate);
         m.insert(0x258688, ElementId::CodecName);
