@@ -463,6 +463,41 @@ impl From<u64> for ContentEncodingType {
     }
 }
 
+/// The compression algorithm used.
+///
+/// # Notes
+/// The Matroska documentation indicate for [ContentCompAlgo](https://www.matroska.org/technical/elements.html#ContentCompAlgo) elements :
+///
+/// > Compression method "1" (bzlib) and "2" (lzo1x) are lacking proper documentation
+/// > on the format which limits implementation possibilities. Due to licensing conflicts
+/// > on commonly available libraries compression methods "2" (lzo1x) does not offer
+/// > widespread interoperability.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ContentCompAlgo {
+    /// Unknown.
+    Unknown,
+    /// Zlib
+    Zlib,
+    /// Bzlib
+    Bzlib,
+    /// Lzo1x
+    Lzo1x,
+    /// Header Stripping.
+    Stripping,
+}
+
+impl From<u64> for ContentCompAlgo {
+    fn from(d: u64) -> Self {
+        match d {
+            0 => Self::Zlib,
+            1 => Self::Bzlib,
+            2 => Self::Lzo1x,
+            3 => Self::Stripping,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// The encryption algorithm used.
 ///
 /// `NotEncrypted` means that the contents have not been encrypted but only signed.

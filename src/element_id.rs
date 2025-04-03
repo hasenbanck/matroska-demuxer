@@ -90,6 +90,9 @@ pub enum ElementId {
     ContentEncodingOrder,
     ContentEncodingScope,
     ContentEncodingType,
+    ContentCompression,
+    ContentCompAlgo,
+    ContentCompSettings,
     ContentEncryption,
     ContentEncAlgo,
     ContentEncKeyId,
@@ -243,6 +246,9 @@ pub(crate) fn element_id_to_type(id: ElementId) -> ElementType {
         m.insert(ElementId::ContentEncodingOrder, ElementType::Unsigned);
         m.insert(ElementId::ContentEncodingScope, ElementType::Unsigned);
         m.insert(ElementId::ContentEncodingType, ElementType::Unsigned);
+        m.insert(ElementId::ContentCompression, ElementType::Master);
+        m.insert(ElementId::ContentCompAlgo, ElementType::Unsigned);
+        m.insert(ElementId::ContentCompSettings, ElementType::Binary);
         m.insert(ElementId::ContentEncryption, ElementType::Master);
         m.insert(ElementId::ContentEncAlgo, ElementType::Unsigned);
         m.insert(ElementId::ContentEncKeyId, ElementType::Unsigned);
@@ -398,6 +404,9 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x5031, ElementId::ContentEncodingOrder);
         m.insert(0x5032, ElementId::ContentEncodingScope);
         m.insert(0x5033, ElementId::ContentEncodingType);
+        m.insert(0x5034, ElementId::ContentCompression);
+        m.insert(0x4254, ElementId::ContentCompAlgo);
+        m.insert(0x4255, ElementId::ContentCompSettings);
         m.insert(0x5035, ElementId::ContentEncryption);
         m.insert(0x47E1, ElementId::ContentEncAlgo);
         m.insert(0x47E2, ElementId::ContentEncKeyId);

@@ -928,7 +928,7 @@ pub enum ContentEncodingValue {
     /// Other encoding not handled.
     Unknown,
     /// Indicate than content is compressed.
-    Compression,
+    Compression(ContentCompression),
     /// Indicate than content is encrypted.
     Encryption(ContentEncryption),
 }
@@ -956,7 +956,11 @@ impl<R: Read + Seek> ParsableElement<R> for ContentEncoding {
 
         let encoding = match encoding_type {
             ContentEncodingType::Unknown => ContentEncodingValue::Unknown,
-            ContentEncodingType::Compression => ContentEncodingValue::Compression,
+            ContentEncodingType::Compression => {
+                let compression =
+                    parse_child::<_, ContentCompression>(r, fields, ElementId::ContentCompression)?;
+                ContentEncodingValue::Compression(compression)
+            }
             ContentEncodingType::Encryption => {
                 let encryption =
                     parse_child::<_, ContentEncryption>(r, fields, ElementId::ContentEncryption)?;
@@ -994,7 +998,7 @@ impl ContentEncoding {
     pub fn encoding_type(&self) -> ContentEncodingType {
         match &self.encoding {
             ContentEncodingValue::Unknown => ContentEncodingType::Unknown,
-            ContentEncodingValue::Compression => ContentEncodingType::Compression,
+            ContentEncodingValue::Compression(_) => ContentEncodingType::Compression,
             ContentEncodingValue::Encryption(_) => ContentEncodingType::Encryption,
         }
     }
@@ -1002,6 +1006,38 @@ impl ContentEncoding {
     /// Return what kind of transformation is applied.
     pub fn encoding(&self) -> &ContentEncodingValue {
         &self.encoding
+    }
+}
+
+/// Settings describing the compression used.
+#[derive(Clone, Debug)]
+pub struct ContentCompression {
+    algo: ContentCompAlgo,
+    comp_settings: Option<Vec<u8>>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for ContentCompression {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let algo =
+            try_find_custom_type_or(fields, ElementId::ContentCompAlgo, ContentCompAlgo::Zlib)?;
+        let comp_settings = try_find_binary(r, fields, ElementId::ContentCompSettings)?;
+        Ok(Self {
+            algo,
+            comp_settings,
+        })
+    }
+}
+
+impl ContentCompression {
+    /// The compression algorithm used.
+    pub fn algo(&self) -> ContentCompAlgo {
+        self.algo
+    }
+    /// The compression settings.
+    pub fn settings(&self) -> Option<&[u8]> {
+        self.comp_settings.as_deref()
     }
 }
 
