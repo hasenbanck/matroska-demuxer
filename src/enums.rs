@@ -444,7 +444,7 @@ impl From<u64> for Primaries {
 
 /// Describing what kind of transformation is applied.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ContentEncodingType {
+pub(crate) enum ContentEncodingType {
     /// Unknown.
     Unknown,
     /// Transformation is a compression.

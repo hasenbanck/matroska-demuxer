@@ -1,8 +1,8 @@
 use std::{fs::File, num::NonZeroU64};
 
 use matroska_demuxer::{
-    ContentCompAlgo, ContentEncodingType, ContentEncodingValue, Frame, MatrixCoefficients,
-    MatroskaFile, Primaries, TrackEntry, TrackType, TransferCharacteristics,
+    ContentCompAlgo, ContentEncodingValue, Frame, MatrixCoefficients, MatroskaFile, Primaries,
+    TrackEntry, TrackType, TransferCharacteristics,
 };
 
 #[test]
@@ -538,14 +538,14 @@ pub fn parse_test3_mkv() {
     assert_eq!(mkv.tracks()[0].content_encodings().unwrap().len(), 1);
     assert_eq!(mkv.tracks()[1].content_encodings().unwrap().len(), 1);
 
-    assert_eq!(
-        mkv.tracks()[0].content_encodings().unwrap()[0].encoding_type(),
-        ContentEncodingType::Compression
-    );
-    assert_eq!(
-        mkv.tracks()[1].content_encodings().unwrap()[0].encoding_type(),
-        ContentEncodingType::Compression
-    );
+    assert!(matches!(
+        mkv.tracks()[0].content_encodings().unwrap()[0].encoding(),
+        ContentEncodingValue::Compression(_)
+    ));
+    assert!(matches!(
+        mkv.tracks()[1].content_encodings().unwrap()[0].encoding(),
+        ContentEncodingValue::Compression(_)
+    ));
 
     let mut frame = Frame::default();
     while mkv.next_frame(&mut frame).unwrap() {}

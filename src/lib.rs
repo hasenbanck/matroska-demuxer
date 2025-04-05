@@ -994,15 +994,6 @@ impl ContentEncoding {
         self.scope
     }
 
-    /// Describes what kind of transformation is applied.
-    pub fn encoding_type(&self) -> ContentEncodingType {
-        match &self.encoding {
-            ContentEncodingValue::Unknown => ContentEncodingType::Unknown,
-            ContentEncodingValue::Compression(_) => ContentEncodingType::Compression,
-            ContentEncodingValue::Encryption(_) => ContentEncodingType::Encryption,
-        }
-    }
-
     /// Return what kind of transformation is applied.
     pub fn encoding(&self) -> &ContentEncodingValue {
         &self.encoding
