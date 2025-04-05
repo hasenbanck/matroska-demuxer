@@ -1,8 +1,8 @@
 use std::{fs::File, num::NonZeroU64};
 
 use matroska_demuxer::{
-    ContentEncodingType, Frame, MatrixCoefficients, MatroskaFile, Primaries, TrackEntry, TrackType,
-    TransferCharacteristics,
+    ContentCompAlgo, ContentEncodingType, ContentEncodingValue, Frame, MatrixCoefficients,
+    MatroskaFile, Primaries, TrackEntry, TrackType, TransferCharacteristics,
 };
 
 #[test]
@@ -256,6 +256,98 @@ pub fn parse_subtitle_mkv() {
         count += 1;
     }
     assert_eq!(count, 154);
+
+    mkv.seek(0).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 0);
+
+    mkv.seek(3).unwrap();
+    assert!(mkv.next_frame(&mut frame).unwrap());
+    assert_eq!(frame.timestamp, 40); // The second frame is at 40ms
+
+    mkv.seek(1_000_000).unwrap();
+    assert!(!mkv.next_frame(&mut frame).unwrap());
+}
+
+#[test]
+pub fn parse_subtitles_pgs_mkv() {
+    let file = File::open("tests/data/subtitles_pgs.mkv").unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
+
+    let info = mkv.info();
+    assert_eq!(info.title(), Some("Big Buck Bunny"));
+
+    let tracks = mkv.tracks();
+    assert_eq!(tracks[0].name(), None);
+    assert_eq!(tracks[1].name(), None);
+    assert_eq!(tracks[1].codec_id(), "S_HDMV/PGS");
+    assert_eq!(tracks[1].language(), None);
+    assert!(tracks[1].flag_default());
+    assert_eq!(tracks[2].name(), None);
+    assert_eq!(tracks[2].codec_id(), "S_HDMV/PGS");
+    assert_eq!(tracks[2].language(), Some("fre"));
+    assert!(!tracks[2].flag_default());
+
+    assert!(matches!(
+        mkv.tracks()[1].content_encodings().unwrap()[0].encoding(),
+        ContentEncodingValue::Compression(comp) if comp.algo() == ContentCompAlgo::Zlib
+    ));
+
+    assert!(matches!(
+        mkv.tracks()[2].content_encodings().unwrap()[0].encoding(),
+        ContentEncodingValue::Compression(comp) if comp.algo() == ContentCompAlgo::Zlib
+    ));
+
+    let mut frame = Frame::default();
+
+    let mut count = 0;
+    let mut track2_sub_idx = 0;
+    let mut track3_sub_idx = 0;
+    while mkv.next_frame(&mut frame).unwrap() {
+        if frame.track == 2 && track2_sub_idx == 0 {
+            track2_sub_idx += 1;
+            assert_eq!(frame.timestamp, 580);
+            assert_eq!(frame.duration, None);
+            assert_eq!(frame.data.len(), 2921);
+        } else if frame.track == 3 && track3_sub_idx == 0 {
+            track3_sub_idx += 1;
+            assert_eq!(frame.timestamp, 580);
+            assert_eq!(frame.duration, None);
+            assert_eq!(frame.data.len(), 2677);
+        } else if frame.track == 2 && track2_sub_idx == 1 {
+            track2_sub_idx += 1;
+            assert_eq!(frame.timestamp, 2400);
+            assert_eq!(frame.duration, None);
+            assert_eq!(frame.data.len(), 36);
+        } else if frame.track == 3 && track3_sub_idx == 1 {
+            track3_sub_idx += 1;
+            assert_eq!(frame.timestamp, 2400);
+            assert_eq!(frame.duration, None);
+            assert_eq!(frame.data.len(), 36);
+        } else if frame.track == 2 && track2_sub_idx == 2 {
+            track2_sub_idx += 1;
+            assert_eq!(frame.timestamp, 2540);
+            assert_eq!(frame.duration, None);
+            assert_eq!(frame.data.len(), 7059);
+        } else if frame.track == 3 && track3_sub_idx == 2 {
+            track3_sub_idx += 1;
+            assert_eq!(frame.timestamp, 2540);
+            assert_eq!(frame.duration, None);
+            assert_eq!(frame.data.len(), 6990);
+        } else if frame.track == 2 && track2_sub_idx == 3 {
+            track2_sub_idx += 1;
+            assert_eq!(frame.timestamp, 4760);
+            assert_eq!(frame.duration, None);
+            assert_eq!(frame.data.len(), 36);
+        } else if frame.track == 3 && track3_sub_idx == 13 {
+            track3_sub_idx += 1;
+            assert_eq!(frame.timestamp, 4760);
+            assert_eq!(frame.duration, None);
+            assert_eq!(frame.data.len(), 36);
+        }
+        count += 1;
+    }
+    assert_eq!(count, 158);
 
     mkv.seek(0).unwrap();
     assert!(mkv.next_frame(&mut frame).unwrap());
