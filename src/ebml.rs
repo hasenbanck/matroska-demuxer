@@ -789,7 +789,7 @@ mod tests {
         let (element_id, element_data) = next_element(&mut cursor)?;
         assert_eq!(element_id, ElementId::Duration);
         if let ElementData::Float(x) = element_data {
-            assert!((x).abs() < 0.00001)
+            assert!(x.abs() < 0.00001)
         } else {
             panic!("parse_element returned the wrong element type");
         }

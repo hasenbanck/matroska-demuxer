@@ -1703,10 +1703,9 @@ impl<R: Read + Seek> MatroskaFile<R> {
     fn seek_broad_phase(&mut self, seek_timestamp: u64, cluster_start: u64) -> Result<u64> {
         if let Some(cue_points) = self.cue_points.as_ref() {
             // Fast path if we have cue points.
-            let seek_pos = match cue_points.binary_search_by(|p| p.time.cmp(&seek_timestamp)) {
-                Ok(seek_pos) => seek_pos,
-                Err(seek_pos) => seek_pos.saturating_sub(1),
-            };
+            let seek_pos = cue_points
+                .binary_search_by(|p| p.time.cmp(&seek_timestamp))
+                .unwrap_or_else(|seek_pos| seek_pos.saturating_sub(1));
 
             if let Some(point) = cue_points.get(seek_pos) {
                 if point.time <= seek_timestamp {
