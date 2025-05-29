@@ -1110,6 +1110,11 @@ impl ContentEncAesSettings {
 /// Contains all information about a segment edition.
 #[derive(Clone, Debug)]
 pub struct EditionEntry {
+    uid: Option<NonZeroU64>,
+    default: Option<bool>,
+    hidden: Option<bool>,
+    ordered: Option<bool>,
+    displays: Vec<EditionDisplay>,
     chapter_atoms: Vec<ChapterAtom>,
 }
 
@@ -1117,10 +1122,24 @@ impl<R: Read + Seek> ParsableElement<R> for EditionEntry {
     type Output = Self;
 
     fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let uid = try_find_nonzero(fields, ElementId::EditionUid)?;
+        let default = try_find_bool(fields, ElementId::EditionFlagDefault)?;
+        let hidden = try_find_bool(fields, ElementId::EditionFlagHidden)?;
+        let ordered = try_find_bool(fields, ElementId::EditionFlagOrdered)?;
+
+        let displays =
+            find_children_in_fields::<_, EditionDisplay>(r, fields, ElementId::EditionDisplay)?;
         let chapter_atoms =
             find_children_in_fields::<_, ChapterAtom>(r, fields, ElementId::ChapterAtom)?;
 
-        Ok(Self { chapter_atoms })
+        Ok(Self {
+            uid,
+            default,
+            hidden,
+            ordered,
+            displays,
+            chapter_atoms,
+        })
     }
 }
 
@@ -1128,6 +1147,65 @@ impl EditionEntry {
     /// Contains the atom information to use as the chapter atom (apply to all tracks).
     pub fn chapter_atoms(&self) -> &[ChapterAtom] {
         self.chapter_atoms.as_ref()
+    }
+
+    /// A unique ID to identify the Edition.
+    pub fn uid(&self) -> Option<NonZeroU64> {
+        self.uid
+    }
+
+    /// Indicate if this edition should be used as the default one. Defaults to `false`.
+    pub fn default(&self) -> Option<bool> {
+        self.default
+    }
+
+    /// Indicate if this edition is hidden. Defaults to `false`.
+    pub fn hidden(&self) -> Option<bool> {
+        self.hidden
+    }
+
+    /// Indicate if the chapters can be defined multiple times and the order to play them is
+    /// enforced. Defaults to `false`.
+    pub fn ordered(&self) -> Option<bool> {
+        self.ordered
+    }
+
+    /// Contains all possible strings to use for the edition display.
+    pub fn displays(&self) -> &[EditionDisplay] {
+        self.displays.as_ref()
+    }
+}
+
+/// Contains all possible strings to use for the edition display.
+#[derive(Clone, Debug)]
+pub struct EditionDisplay {
+    string: String,
+    language_ietf: Option<String>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for EditionDisplay {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let string = find_string(fields, ElementId::EditionString)?;
+        let language_ietf = try_find_string(fields, ElementId::EditionLanguageIetf)?;
+
+        Ok(Self {
+            string,
+            language_ietf,
+        })
+    }
+}
+
+impl EditionDisplay {
+    /// Contains the string to use as the edition display.
+    pub fn string(&self) -> &str {
+        self.string.as_ref()
+    }
+
+    /// Specifies the language according to BCP47 and using the IANA Language Subtag Registry.
+    pub fn language_ietf(&self) -> Option<&str> {
+        self.language_ietf.as_deref()
     }
 }
 

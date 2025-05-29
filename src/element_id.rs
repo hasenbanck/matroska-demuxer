@@ -134,6 +134,13 @@ pub enum ElementId {
     CueBlockNumber,
     Chapters,
     EditionEntry,
+    EditionUid,
+    EditionFlagHidden,
+    EditionFlagDefault,
+    EditionFlagOrdered,
+    EditionDisplay,
+    EditionString,
+    EditionLanguageIetf,
     ChapterAtom,
     ChapterUid,
     ChapterStringUid,
@@ -290,6 +297,13 @@ pub(crate) fn element_id_to_type(id: ElementId) -> ElementType {
         m.insert(ElementId::CueBlockNumber, ElementType::Unsigned);
         m.insert(ElementId::Chapters, ElementType::Master);
         m.insert(ElementId::EditionEntry, ElementType::Master);
+        m.insert(ElementId::EditionUid, ElementType::Unsigned);
+        m.insert(ElementId::EditionFlagHidden, ElementType::Unsigned);
+        m.insert(ElementId::EditionFlagDefault, ElementType::Unsigned);
+        m.insert(ElementId::EditionFlagOrdered, ElementType::Unsigned);
+        m.insert(ElementId::EditionString, ElementType::String);
+        m.insert(ElementId::EditionLanguageIetf, ElementType::String);
+        m.insert(ElementId::EditionDisplay, ElementType::Master);
         m.insert(ElementId::ChapterAtom, ElementType::Master);
         m.insert(ElementId::ChapterUid, ElementType::Unsigned);
         m.insert(ElementId::ChapterStringUid, ElementType::String);
@@ -448,6 +462,13 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x5378, ElementId::CueBlockNumber);
         m.insert(0x1043A770, ElementId::Chapters);
         m.insert(0x45B9, ElementId::EditionEntry);
+        m.insert(0x45BC, ElementId::EditionUid);
+        m.insert(0x45BD, ElementId::EditionFlagHidden);
+        m.insert(0x45DB, ElementId::EditionFlagDefault);
+        m.insert(0x45DD, ElementId::EditionFlagOrdered);
+        m.insert(0x4520, ElementId::EditionDisplay);
+        m.insert(0x4521, ElementId::EditionString);
+        m.insert(0x45E4, ElementId::EditionLanguageIetf);
         m.insert(0xB6, ElementId::ChapterAtom);
         m.insert(0x73C4, ElementId::ChapterUid);
         m.insert(0x5654, ElementId::ChapterStringUid);
