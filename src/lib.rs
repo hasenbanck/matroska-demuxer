@@ -1216,6 +1216,8 @@ pub struct ChapterAtom {
     string_uid: Option<String>,
     time_start: u64,
     time_end: Option<u64>,
+    hidden: Option<bool>,
+    enabled: Option<bool>,
     displays: Vec<ChapterDisplay>,
 }
 
@@ -1227,6 +1229,8 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
         let string_uid = try_find_string(fields, ElementId::ChapterStringUid)?;
         let time_start = find_unsigned(fields, ElementId::ChapterTimeStart)?;
         let time_end = try_find_unsigned(fields, ElementId::ChapterTimeEnd)?;
+        let hidden = try_find_bool(fields, ElementId::ChapterFlagHidden)?;
+        let enabled = try_find_bool(fields, ElementId::ChapterFlagEnabled)?;
 
         let displays =
             find_children_in_fields::<_, ChapterDisplay>(r, fields, ElementId::ChapterDisplay)?;
@@ -1236,6 +1240,8 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
             string_uid,
             time_start,
             time_end,
+            hidden,
+            enabled,
             displays,
         })
     }
@@ -1260,6 +1266,16 @@ impl ChapterAtom {
     /// Timestamp of the end of Chapter.
     pub fn time_end(&self) -> Option<u64> {
         self.time_end
+    }
+
+    /// Indicate if this chapter is hidden. Defaults to `false`.
+    pub fn hidden(&self) -> Option<bool> {
+        self.hidden
+    }
+
+    /// Indicate if this chapter is enabled. Defaults to `true`.
+    pub fn enabled(&self) -> Option<bool> {
+        self.enabled
     }
 
     /// Contains all possible strings to use for the chapter display.
