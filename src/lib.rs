@@ -1581,8 +1581,11 @@ impl Tag {
 #[derive(Clone, Debug)]
 pub struct Targets {
     target_type_value: Option<u64>,
-    _target_type: Option<String>,
+    target_type: Option<String>,
     tag_track_uid: Vec<u64>,
+    tag_edition_uid: Vec<u64>,
+    tag_chapter_uid: Vec<u64>,
+    tag_attachment_uid: Vec<u64>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for Targets {
@@ -1592,11 +1595,17 @@ impl<R: Read + Seek> ParsableElement<R> for Targets {
         let target_type_value = try_find_unsigned(fields, ElementId::TargetTypeValue)?;
         let target_type = try_find_string(fields, ElementId::TargetType)?;
         let tag_track_uid = find_all_unsigned(fields, ElementId::TagTrackUid)?;
+        let tag_edition_uid = find_all_unsigned(fields, ElementId::TagEditionUid)?;
+        let tag_chapter_uid = find_all_unsigned(fields, ElementId::TagChapterUid)?;
+        let tag_attachment_uid = find_all_unsigned(fields, ElementId::TagAttachmentUid)?;
 
         Ok(Self {
             target_type_value,
-            _target_type: target_type,
+            target_type,
             tag_track_uid,
+            tag_edition_uid,
+            tag_chapter_uid,
+            tag_attachment_uid,
         })
     }
 }
@@ -1607,10 +1616,33 @@ impl Targets {
         self.target_type_value
     }
 
+    /// The value of the tag, if it is a string.
+    pub fn target_type(&self) -> Option<&str> {
+        self.target_type.as_deref()
+    }
+
     /// A unique ID to identify the track(s) the tags belong to.
     /// If the value is 0 at this level, the tags apply to all tracks in the Segment.
     pub fn tag_track_uid(&self) -> &[u64] {
         &self.tag_track_uid
+    }
+
+    /// A unique ID to identify the edition(s) the tags belong to.
+    /// If the value is 0 at this level, the tags apply to all editions in the Segment.
+    pub fn tag_edition_uid(&self) -> &[u64] {
+        &self.tag_edition_uid
+    }
+
+    /// A unique ID to identify the chapter(s) the tags belong to.
+    /// If the value is 0 at this level, the tags apply to all chapters in the Segment.
+    pub fn tag_chapter_uid(&self) -> &[u64] {
+        &self.tag_chapter_uid
+    }
+
+    /// A unique ID to identify the attachment(s) the tags belong to.
+    /// If the value is 0 at this level, the tags apply to all attachments in the Segment.
+    pub fn tag_attachment_uid(&self) -> &[u64] {
+        &self.tag_attachment_uid
     }
 }
 

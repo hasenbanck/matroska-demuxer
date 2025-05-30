@@ -178,6 +178,9 @@ pub enum ElementId {
     TargetTypeValue,
     TargetType,
     TagTrackUid,
+    TagEditionUid,
+    TagChapterUid,
+    TagAttachmentUid,
     SimpleTag,
     TagName,
     TagLanguage,
@@ -362,6 +365,9 @@ pub(crate) fn element_id_to_type(id: ElementId) -> ElementType {
         m.insert(ElementId::TargetTypeValue, ElementType::Unsigned);
         m.insert(ElementId::TargetType, ElementType::String);
         m.insert(ElementId::TagTrackUid, ElementType::Unsigned);
+        m.insert(ElementId::TagEditionUid, ElementType::Unsigned);
+        m.insert(ElementId::TagChapterUid, ElementType::Unsigned);
+        m.insert(ElementId::TagAttachmentUid, ElementType::Unsigned);
         m.insert(ElementId::SimpleTag, ElementType::Master);
         m.insert(ElementId::TagName, ElementType::String);
         m.insert(ElementId::TagLanguage, ElementType::String);
@@ -548,6 +554,9 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x68CA, ElementId::TargetTypeValue);
         m.insert(0x63CA, ElementId::TargetType);
         m.insert(0x63C5, ElementId::TagTrackUid);
+        m.insert(0x63C9, ElementId::TagEditionUid);
+        m.insert(0x63C4, ElementId::TagChapterUid);
+        m.insert(0x63C6, ElementId::TagAttachmentUid);
         m.insert(0x67C8, ElementId::SimpleTag);
         m.insert(0x45A3, ElementId::TagName);
         m.insert(0x447A, ElementId::TagLanguage);
