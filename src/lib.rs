@@ -36,8 +36,8 @@ use std::{
 };
 
 use ebml::{
-    collect_children, expect_master, find_bool_or, find_custom_type, find_float_or, find_nonzero,
-    find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element,
+    collect_children, expect_master, find_binary, find_bool_or, find_custom_type, find_float_or,
+    find_nonzero, find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element,
     parse_children_at_offset, parse_element_header, try_find_binary, try_find_custom_type,
     try_find_custom_type_or, try_find_date, try_find_float, try_find_nonzero, try_find_string,
     try_find_unsigned, try_parse_child, try_parse_children, ElementData, ParsableElement,
@@ -1221,6 +1221,7 @@ pub struct ChapterAtom {
     displays: Vec<ChapterDisplay>,
     nested_chapters: Vec<ChapterAtom>,
     chapter_tracks: Vec<NonZeroU64>,
+    process: Vec<ChapProcess>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
@@ -1239,6 +1240,7 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
         let nested_chapters =
             find_children_in_fields::<_, ChapterAtom>(r, fields, ElementId::ChapterAtom)?;
         let chapter_tracks = Vec::new(); // FIXME
+        let process = find_children_in_fields::<_, ChapProcess>(r, fields, ElementId::ChapProcess)?;
 
         Ok(Self {
             uid,
@@ -1250,6 +1252,7 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
             displays,
             nested_chapters,
             chapter_tracks,
+            process,
         })
     }
 }
@@ -1300,6 +1303,11 @@ impl ChapterAtom {
     pub fn chapter_tracks(&self) -> &[NonZeroU64] {
         self.chapter_tracks.as_ref()
     }
+
+    /// Contains all the commands associated to the Atom.
+    pub fn process(&self) -> &[ChapProcess] {
+        self.process.as_ref()
+    }
 }
 
 /// Contains all possible strings to use for the chapter display.
@@ -1349,6 +1357,88 @@ impl ChapterDisplay {
     /// Internet domains based on ISO3166-1 alpha-2 codes.
     pub fn country(&self) -> Option<&str> {
         self.country.as_deref()
+    }
+}
+
+/// Contains all the commands associated to the chapter atom.
+#[derive(Clone, Debug)]
+pub struct ChapProcess {
+    codec_id: ChapProcessCodecId,
+    private: Option<Vec<u8>>,
+    commands: Vec<ChapProcessCommand>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for ChapProcess {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let codec_id = try_find_custom_type_or(
+            fields,
+            ElementId::ChapProcessCodecId,
+            ChapProcessCodecId::Matroska,
+        )?;
+
+        let private = try_find_binary(r, fields, ElementId::ChapProcessPrivate)?;
+
+        let commands = find_children_in_fields::<_, ChapProcessCommand>(
+            r,
+            fields,
+            ElementId::ChapProcessCommand,
+        )?;
+
+        Ok(Self {
+            codec_id,
+            private,
+            commands,
+        })
+    }
+}
+
+impl ChapProcess {
+    /// Contains the type of the codec used for the processing.
+    pub fn codec_id(&self) -> ChapProcessCodecId {
+        self.codec_id
+    }
+
+    /// Contains the command information.
+    pub fn private(&self) -> Option<&[u8]> {
+        self.private.as_deref()
+    }
+
+    /// Contains all the commands associated to the Atom.
+    pub fn commands(&self) -> &[ChapProcessCommand] {
+        self.commands.as_ref()
+    }
+}
+
+/// Contains all the commands associated to the chapter atom.
+#[derive(Clone, Debug)]
+pub struct ChapProcessCommand {
+    time: ChapProcessTime,
+    data: Vec<u8>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for ChapProcessCommand {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let time = find_custom_type(fields, ElementId::ChapProcessTime)?;
+
+        let data = find_binary(r, fields, ElementId::ChapProcessData)?;
+
+        Ok(Self { time, data })
+    }
+}
+
+impl ChapProcessCommand {
+    /// Defines when the process command should be handled.
+    pub fn time(&self) -> ChapProcessTime {
+        self.time
+    }
+
+    /// Contains the command information.
+    pub fn data(&self) -> &[u8] {
+        self.data.as_ref()
     }
 }
 

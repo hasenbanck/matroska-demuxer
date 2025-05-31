@@ -370,6 +370,15 @@ pub(crate) fn try_find_string(
     }
 }
 
+/// Expects to find an element with the Element ID for a string inside a list of children.
+pub(crate) fn find_binary<R: Read + Seek>(
+    r: &mut R,
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Vec<u8>> {
+    try_find_binary(r, fields, element_id)?.ok_or(DemuxError::ElementNotFound(element_id))
+}
+
 /// Tries to find an element with the Element ID for binary inside a list of children.
 pub(crate) fn try_find_binary<R: Read + Seek>(
     r: &mut R,

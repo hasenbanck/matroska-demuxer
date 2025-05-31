@@ -553,3 +553,49 @@ impl From<u64> for AesSettingsCipherMode {
         }
     }
 }
+
+/// The type of the codec used for the chapter menu processing.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum ChapProcessCodecId {
+    /// Unknown.
+    Unknown,
+    /// Native matroska processing.
+    Matroska,
+    /// DVD command set.
+    DvdMenu,
+}
+
+impl From<u64> for ChapProcessCodecId {
+    fn from(d: u64) -> Self {
+        match d {
+            0 => ChapProcessCodecId::Matroska,
+            1 => ChapProcessCodecId::DvdMenu,
+            _ => ChapProcessCodecId::Unknown,
+        }
+    }
+}
+
+/// Defines when the process command should be handled.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChapProcessTime {
+    /// Unknown.
+    Unknown,
+    /// Process during the whole chapter.
+    WholeChapter,
+    /// Process before starting playback.
+    BeforePlayback,
+    /// Process after starting playback.
+    AfterPlayback,
+}
+
+impl From<u64> for ChapProcessTime {
+    fn from(d: u64) -> Self {
+        match d {
+            0 => ChapProcessTime::WholeChapter,
+            1 => ChapProcessTime::BeforePlayback,
+            2 => ChapProcessTime::AfterPlayback,
+            _ => ChapProcessTime::Unknown,
+        }
+    }
+}

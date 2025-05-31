@@ -155,6 +155,12 @@ pub enum ElementId {
     ChapLanguage,
     ChapLanguageIetf,
     ChapCountry,
+    ChapProcess,
+    ChapProcessCodecId,
+    ChapProcessPrivate,
+    ChapProcessCommand,
+    ChapProcessTime,
+    ChapProcessData,
     Tags,
     Tag,
     Targets,
@@ -322,6 +328,12 @@ pub(crate) fn element_id_to_type(id: ElementId) -> ElementType {
         m.insert(ElementId::ChapLanguage, ElementType::String);
         m.insert(ElementId::ChapLanguageIetf, ElementType::String);
         m.insert(ElementId::ChapCountry, ElementType::String);
+        m.insert(ElementId::ChapProcess, ElementType::Master);
+        m.insert(ElementId::ChapProcessCodecId, ElementType::Unsigned);
+        m.insert(ElementId::ChapProcessPrivate, ElementType::Binary);
+        m.insert(ElementId::ChapProcessCommand, ElementType::Master);
+        m.insert(ElementId::ChapProcessTime, ElementType::Unsigned);
+        m.insert(ElementId::ChapProcessData, ElementType::Binary);
         m.insert(ElementId::Tags, ElementType::Master);
         m.insert(ElementId::Tag, ElementType::Master);
         m.insert(ElementId::Targets, ElementType::Master);
@@ -491,6 +503,12 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x437C, ElementId::ChapLanguage);
         m.insert(0x437D, ElementId::ChapLanguageIetf);
         m.insert(0x437E, ElementId::ChapCountry);
+        m.insert(0x6944, ElementId::ChapProcess);
+        m.insert(0x6955, ElementId::ChapProcessCodecId);
+        m.insert(0x450D, ElementId::ChapProcessPrivate);
+        m.insert(0x6911, ElementId::ChapProcessCommand);
+        m.insert(0x6922, ElementId::ChapProcessTime);
+        m.insert(0x6933, ElementId::ChapProcessData);
         m.insert(0x1254C367, ElementId::Tags);
         m.insert(0x7373, ElementId::Tag);
         m.insert(0x63C0, ElementId::Targets);
