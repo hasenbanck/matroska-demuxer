@@ -24,6 +24,13 @@ pub enum ElementId {
     SeekId,
     SeekPosition,
     Info,
+    SegmentUuid,
+    SegmentFilename,
+    PrevUuid,
+    PrevFilename,
+    NextUuid,
+    NextFilename,
+    SegmentFamily,
     TimestampScale,
     Duration,
     DateUtc,
@@ -201,6 +208,13 @@ pub(crate) fn element_id_to_type(id: ElementId) -> ElementType {
         m.insert(ElementId::SeekId, ElementType::Unsigned);
         m.insert(ElementId::SeekPosition, ElementType::Unsigned);
         m.insert(ElementId::Info, ElementType::Master);
+        m.insert(ElementId::SegmentUuid, ElementType::Binary);
+        m.insert(ElementId::SegmentFilename, ElementType::String);
+        m.insert(ElementId::PrevUuid, ElementType::Binary);
+        m.insert(ElementId::PrevFilename, ElementType::String);
+        m.insert(ElementId::NextUuid, ElementType::Binary);
+        m.insert(ElementId::NextFilename, ElementType::String);
+        m.insert(ElementId::SegmentFamily, ElementType::Binary);
         m.insert(ElementId::TimestampScale, ElementType::Unsigned);
         m.insert(ElementId::Duration, ElementType::Float);
         m.insert(ElementId::DateUtc, ElementType::Date);
@@ -380,6 +394,13 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x53AB, ElementId::SeekId);
         m.insert(0x53AC, ElementId::SeekPosition);
         m.insert(0x1549A966, ElementId::Info);
+        m.insert(0x73A4, ElementId::SegmentUuid);
+        m.insert(0x7384, ElementId::SegmentFilename);
+        m.insert(0x3CB923, ElementId::PrevUuid);
+        m.insert(0x3C83AB, ElementId::PrevFilename);
+        m.insert(0x3EB923, ElementId::NextUuid);
+        m.insert(0x3E83BB, ElementId::NextFilename);
+        m.insert(0x4444, ElementId::SegmentFamily);
         m.insert(0x2AD7B1, ElementId::TimestampScale);
         m.insert(0x4489, ElementId::Duration);
         m.insert(0x4461, ElementId::DateUtc);

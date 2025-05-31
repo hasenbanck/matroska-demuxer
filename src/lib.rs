@@ -211,18 +211,33 @@ pub struct Info {
     title: Option<String>,
     muxing_app: String,
     writing_app: String,
+    segment_uuid: Option<NonZeroU128>,
+    segment_filename: Option<String>,
+    prev_uuid: Option<NonZeroU128>,
+    prev_filename: Option<String>,
+    next_uuid: Option<NonZeroU128>,
+    next_filename: Option<String>,
+    segment_family: Option<NonZeroU128>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for Info {
     type Output = Self;
 
-    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let timestamp_scale = find_nonzero_or(fields, ElementId::TimestampScale, 1000000)?;
         let duration = try_find_float(fields, ElementId::Duration)?;
         let date_utc = try_find_date(fields, ElementId::DateUtc)?;
         let title = try_find_string(fields, ElementId::Title)?;
         let muxing_app = find_string(fields, ElementId::MuxingApp)?;
         let writing_app = find_string(fields, ElementId::WritingApp)?;
+
+        let segment_uuid = try_find_uuid(r, fields, ElementId::SegmentUuid)?;
+        let segment_filename = try_find_string(fields, ElementId::SegmentFilename)?;
+        let prev_uuid = try_find_uuid(r, fields, ElementId::PrevUuid)?;
+        let prev_filename = try_find_string(fields, ElementId::PrevFilename)?;
+        let next_uuid = try_find_uuid(r, fields, ElementId::NextUuid)?;
+        let next_filename = try_find_string(fields, ElementId::NextFilename)?;
+        let segment_family = try_find_uuid(r, fields, ElementId::SegmentFamily)?;
 
         if let Some(duration) = duration {
             if duration < 0.0 {
@@ -237,6 +252,13 @@ impl<R: Read + Seek> ParsableElement<R> for Info {
             title,
             muxing_app,
             writing_app,
+            segment_uuid,
+            segment_filename,
+            prev_uuid,
+            prev_filename,
+            next_uuid,
+            next_filename,
+            segment_family,
         })
     }
 }
@@ -270,6 +292,49 @@ impl Info {
     /// Writing  application.
     pub fn writing_app(&self) -> &str {
         &self.writing_app
+    }
+
+    /// A randomly generated unique ID to identify the Segment amongst many others.
+    ///
+    /// It is equivalent to a UUID v4 with all bits randomly (or pseudo-randomly) chosen.
+    pub fn segment_uuid(&self) -> Option<NonZeroU128> {
+        self.segment_uuid
+    }
+
+    /// A filename corresponding to this Segment.
+    pub fn segment_filename(&self) -> Option<&str> {
+        self.segment_filename.as_deref()
+    }
+
+    /// An ID to identify the previous Segment of a Linked Segment.
+    pub fn prev_uuid(&self) -> Option<NonZeroU128> {
+        self.prev_uuid
+    }
+
+    /// A filename corresponding to the file of the previous Linked Segment.
+    ///
+    /// Provision of the previous filename is for display convenience, but PrevUUID should be
+    /// considered authoritative for identifying the previous Segment in a Linked Segment.
+    pub fn prev_filename(&self) -> Option<&str> {
+        self.prev_filename.as_deref()
+    }
+
+    /// An ID to identify the next Segment of a Linked Segment.
+    pub fn next_uuid(&self) -> Option<NonZeroU128> {
+        self.next_uuid
+    }
+
+    /// A filename corresponding to the file of the next Linked Segment.
+    ///
+    /// Provision of the next filename is for display convenience, but PrevUUID should be considered
+    /// authoritative for identifying the next Segment in a Linked Segment.
+    pub fn next_filename(&self) -> Option<&str> {
+        self.next_filename.as_deref()
+    }
+
+    /// A unique ID that all Segments of a Linked Segment must share.
+    pub fn segment_family(&self) -> Option<NonZeroU128> {
+        self.segment_family
     }
 }
 
