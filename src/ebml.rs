@@ -213,6 +213,24 @@ pub(crate) fn try_find_unsigned(
     }
 }
 
+/// Tries to find all element with the Element ID for an unsigned integer inside a list of children.
+pub(crate) fn find_all_unsigned(
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Vec<u64>> {
+    fields
+        .iter()
+        .filter(|(id, _)| *id == element_id)
+        .map(|(_, data)| {
+            if let ElementData::Unsigned(value) = data {
+                Ok(*value)
+            } else {
+                Err(DemuxError::UnexpectedDataType)
+            }
+        })
+        .collect()
+}
+
 /// Tries to find an element with the Element ID for a custom type inside a list of children, otherwise sets the default value.
 pub(crate) fn try_find_custom_type_or<T: From<u64>>(
     fields: &[(ElementId, ElementData)],

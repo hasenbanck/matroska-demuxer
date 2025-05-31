@@ -36,12 +36,12 @@ use std::{
 };
 
 use ebml::{
-    collect_children, expect_master, find_binary, find_bool_or, find_custom_type, find_float_or,
-    find_nonzero, find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element,
-    parse_children_at_offset, parse_element_header, try_find_binary, try_find_custom_type,
-    try_find_custom_type_or, try_find_date, try_find_float, try_find_nonzero, try_find_string,
-    try_find_unsigned, try_find_uuid, try_parse_child, try_parse_children, ElementData,
-    ParsableElement,
+    collect_children, expect_master, find_all_unsigned, find_binary, find_bool_or,
+    find_custom_type, find_float_or, find_nonzero, find_nonzero_or, find_string, find_unsigned,
+    find_unsigned_or, next_element, parse_children_at_offset, parse_element_header,
+    try_find_binary, try_find_custom_type, try_find_custom_type_or, try_find_date, try_find_float,
+    try_find_nonzero, try_find_string, try_find_unsigned, try_find_uuid, try_parse_child,
+    try_parse_children, ElementData, ParsableElement,
 };
 pub use element_id::ElementId;
 pub use enums::*;
@@ -1582,7 +1582,7 @@ impl Tag {
 pub struct Targets {
     target_type_value: Option<u64>,
     _target_type: Option<String>,
-    tag_track_uid: Option<u64>,
+    tag_track_uid: Vec<u64>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for Targets {
@@ -1591,7 +1591,7 @@ impl<R: Read + Seek> ParsableElement<R> for Targets {
     fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let target_type_value = try_find_unsigned(fields, ElementId::TargetTypeValue)?;
         let target_type = try_find_string(fields, ElementId::TargetType)?;
-        let tag_track_uid = try_find_unsigned(fields, ElementId::TagTrackUid)?;
+        let tag_track_uid = find_all_unsigned(fields, ElementId::TagTrackUid)?;
 
         Ok(Self {
             target_type_value,
@@ -1609,8 +1609,8 @@ impl Targets {
 
     /// A unique ID to identify the track(s) the tags belong to.
     /// If the value is 0 at this level, the tags apply to all tracks in the Segment.
-    pub fn tag_track_uid(&self) -> Option<u64> {
-        self.tag_track_uid
+    pub fn tag_track_uid(&self) -> &[u64] {
+        &self.tag_track_uid
     }
 }
 
