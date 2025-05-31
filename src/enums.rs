@@ -590,6 +590,48 @@ impl From<u64> for ChapterSkipType {
     }
 }
 
+/// Specify the physical equivalent of this ChapterAtom.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChapterPhysicalEquiv {
+    /// Unknown.
+    Unknown,
+    /// The collection of different media.
+    ///
+    /// Example: set / package.
+    Set,
+    /// The physical medium.
+    ///
+    /// Example: CD / 12” / TAPE / DVD / VHS / LASERDISC.
+    Medium,
+    /// Side, when the original medium has different sides.
+    Side,
+    /// Layer.
+    ///
+    /// Physical layers on DVDs.
+    Layer,
+    /// Session, as found on CDs and DVDs.
+    Session,
+    /// Trask, as found on CDs and DVDs..
+    Track,
+    /// Index, as found on CDs and DVDs..
+    Index,
+}
+
+impl From<u64> for ChapterPhysicalEquiv {
+    fn from(d: u64) -> Self {
+        match d {
+            70 => ChapterPhysicalEquiv::Set,
+            60 => ChapterPhysicalEquiv::Medium,
+            50 => ChapterPhysicalEquiv::Side,
+            40 => ChapterPhysicalEquiv::Layer,
+            30 => ChapterPhysicalEquiv::Session,
+            20 => ChapterPhysicalEquiv::Track,
+            10 => ChapterPhysicalEquiv::Index,
+            _ => ChapterPhysicalEquiv::Unknown,
+        }
+    }
+}
+
 /// The type of the codec used for the chapter menu processing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]

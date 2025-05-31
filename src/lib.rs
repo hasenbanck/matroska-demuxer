@@ -1219,6 +1219,7 @@ pub struct ChapterAtom {
     hidden: Option<bool>,
     enabled: Option<bool>,
     skip_type: Option<ChapterSkipType>,
+    physical_equivalent: Option<ChapterPhysicalEquiv>,
     displays: Vec<ChapterDisplay>,
     nested_chapters: Vec<ChapterAtom>,
     chapter_tracks: Vec<NonZeroU64>,
@@ -1238,6 +1239,8 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
 
         let skip_type = try_find_custom_type(fields, ElementId::ChapterSkipType)?;
 
+        let physical_equivalent = try_find_custom_type(fields, ElementId::ChapterPhysicalEquiv)?;
+
         let displays =
             find_children_in_fields::<_, ChapterDisplay>(r, fields, ElementId::ChapterDisplay)?;
         let nested_chapters =
@@ -1253,6 +1256,7 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
             hidden,
             enabled,
             skip_type,
+            physical_equivalent,
             displays,
             nested_chapters,
             chapter_tracks,
@@ -1295,6 +1299,11 @@ impl ChapterAtom {
     /// Indicate what type of content the ChapterAtom contains and might be skipped.
     pub fn skip_type(&self) -> Option<ChapterSkipType> {
         self.skip_type
+    }
+
+    /// Specify the physical equivalent of this ChapterAtom.
+    pub fn physical_equivalent(&self) -> Option<ChapterPhysicalEquiv> {
+        self.physical_equivalent
     }
 
     /// Contains all possible strings to use for the chapter display.
