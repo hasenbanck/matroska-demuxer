@@ -554,6 +554,42 @@ impl From<u64> for AesSettingsCipherMode {
     }
 }
 
+/// Indicate what type of content the ChapterAtom contains and might be skipped.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChapterSkipType {
+    /// Unknown.
+    Unknown,
+    /// No skipping.
+    NoSkipping,
+    /// Opening Credits.
+    OpeningCredits,
+    /// End Credits.
+    EndCredits,
+    /// Recap.
+    Recap,
+    /// Next Preview.
+    NextPreview,
+    /// Preview.
+    Preview,
+    /// Advertisement.
+    Advertisement,
+}
+
+impl From<u64> for ChapterSkipType {
+    fn from(d: u64) -> Self {
+        match d {
+            0 => ChapterSkipType::NoSkipping,
+            1 => ChapterSkipType::OpeningCredits,
+            2 => ChapterSkipType::EndCredits,
+            3 => ChapterSkipType::Recap,
+            4 => ChapterSkipType::NextPreview,
+            5 => ChapterSkipType::Preview,
+            6 => ChapterSkipType::Advertisement,
+            _ => ChapterSkipType::Unknown,
+        }
+    }
+}
+
 /// The type of the codec used for the chapter menu processing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]

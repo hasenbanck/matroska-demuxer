@@ -1218,6 +1218,7 @@ pub struct ChapterAtom {
     time_end: Option<u64>,
     hidden: Option<bool>,
     enabled: Option<bool>,
+    skip_type: Option<ChapterSkipType>,
     displays: Vec<ChapterDisplay>,
     nested_chapters: Vec<ChapterAtom>,
     chapter_tracks: Vec<NonZeroU64>,
@@ -1235,6 +1236,8 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
         let hidden = try_find_bool(fields, ElementId::ChapterFlagHidden)?;
         let enabled = try_find_bool(fields, ElementId::ChapterFlagEnabled)?;
 
+        let skip_type = try_find_custom_type(fields, ElementId::ChapterSkipType)?;
+
         let displays =
             find_children_in_fields::<_, ChapterDisplay>(r, fields, ElementId::ChapterDisplay)?;
         let nested_chapters =
@@ -1249,6 +1252,7 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
             time_end,
             hidden,
             enabled,
+            skip_type,
             displays,
             nested_chapters,
             chapter_tracks,
@@ -1286,6 +1290,11 @@ impl ChapterAtom {
     /// Indicate if this chapter is enabled. Defaults to `true`.
     pub fn enabled(&self) -> Option<bool> {
         self.enabled
+    }
+
+    /// Indicate what type of content the ChapterAtom contains and might be skipped.
+    pub fn skip_type(&self) -> Option<ChapterSkipType> {
+        self.skip_type
     }
 
     /// Contains all possible strings to use for the chapter display.
