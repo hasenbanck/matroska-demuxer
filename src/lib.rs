@@ -1220,6 +1220,7 @@ pub struct ChapterAtom {
     enabled: Option<bool>,
     displays: Vec<ChapterDisplay>,
     nested_chapters: Vec<ChapterAtom>,
+    chapter_tracks: Vec<NonZeroU64>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
@@ -1237,6 +1238,7 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
             find_children_in_fields::<_, ChapterDisplay>(r, fields, ElementId::ChapterDisplay)?;
         let nested_chapters =
             find_children_in_fields::<_, ChapterAtom>(r, fields, ElementId::ChapterAtom)?;
+        let chapter_tracks = Vec::new(); // FIXME
 
         Ok(Self {
             uid,
@@ -1247,6 +1249,7 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
             enabled,
             displays,
             nested_chapters,
+            chapter_tracks,
         })
     }
 }
@@ -1290,6 +1293,12 @@ impl ChapterAtom {
     /// Contains all nested chapters.
     pub fn nested_chapters(&self) -> &[ChapterAtom] {
         self.nested_chapters.as_ref()
+    }
+
+    /// List of tracks on which the chapter applies.
+    /// If this Element is not present, all tracks apply.
+    pub fn chapter_tracks(&self) -> &[NonZeroU64] {
+        self.chapter_tracks.as_ref()
     }
 }
 

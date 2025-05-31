@@ -148,6 +148,8 @@ pub enum ElementId {
     ChapterTimeEnd,
     ChapterFlagHidden,
     ChapterFlagEnabled,
+    ChapterTrack,
+    ChapterTrackUID,
     ChapterDisplay,
     ChapString,
     ChapLanguage,
@@ -313,6 +315,8 @@ pub(crate) fn element_id_to_type(id: ElementId) -> ElementType {
         m.insert(ElementId::ChapterTimeEnd, ElementType::Unsigned);
         m.insert(ElementId::ChapterFlagHidden, ElementType::Unsigned);
         m.insert(ElementId::ChapterFlagEnabled, ElementType::Unsigned);
+        m.insert(ElementId::ChapterTrack, ElementType::Master);
+        m.insert(ElementId::ChapterTrackUID, ElementType::Unsigned);
         m.insert(ElementId::ChapterDisplay, ElementType::Master);
         m.insert(ElementId::ChapString, ElementType::String);
         m.insert(ElementId::ChapLanguage, ElementType::String);
@@ -480,6 +484,8 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x92, ElementId::ChapterTimeEnd);
         m.insert(0x98, ElementId::ChapterFlagHidden);
         m.insert(0x4598, ElementId::ChapterFlagEnabled);
+        m.insert(0x8F, ElementId::ChapterTrack);
+        m.insert(0x89, ElementId::ChapterTrackUID);
         m.insert(0x80, ElementId::ChapterDisplay);
         m.insert(0x85, ElementId::ChapString);
         m.insert(0x437C, ElementId::ChapLanguage);
