@@ -3,7 +3,7 @@
 use std::{
     convert::{TryFrom, TryInto},
     io::{Read, Seek, SeekFrom},
-    num::NonZeroU64,
+    num::{NonZeroU128, NonZeroU64},
 };
 
 use crate::element_id::{element_id_to_type, id_to_element_id};
@@ -392,6 +392,32 @@ pub(crate) fn try_find_binary<R: Read + Seek>(
             r.seek(SeekFrom::Start(*offset))?;
             r.read_exact(&mut data)?;
             Ok(Some(data))
+        } else {
+            Err(DemuxError::UnexpectedDataType)
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+/// Tries to find an element with the Element ID for an UUID inside a list of children.
+pub(crate) fn try_find_uuid<R: Read + Seek>(
+    r: &mut R,
+    fields: &[(ElementId, ElementData)],
+    element_id: ElementId,
+) -> Result<Option<NonZeroU128>> {
+    if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
+        if let ElementData::Location { offset, size } = data {
+            if *size != 16 {
+                return Err(DemuxError::UnexpectedDataType);
+            }
+            let mut bytes = [0u8; 16];
+            r.seek(SeekFrom::Start(*offset))?;
+            r.read_exact(&mut bytes)?;
+            let uuid = u128::from_be_bytes(bytes);
+            NonZeroU128::new(uuid)
+                .map(Some)
+                .ok_or(DemuxError::NonZeroValueIsZero(element_id))
         } else {
             Err(DemuxError::UnexpectedDataType)
         }

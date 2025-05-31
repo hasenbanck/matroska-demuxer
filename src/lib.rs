@@ -32,7 +32,7 @@ use std::{
     convert::TryInto,
     error::Error,
     io::{Read, Seek, SeekFrom},
-    num::NonZeroU64,
+    num::{NonZeroU128, NonZeroU64},
 };
 
 use ebml::{
@@ -40,7 +40,8 @@ use ebml::{
     find_nonzero, find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element,
     parse_children_at_offset, parse_element_header, try_find_binary, try_find_custom_type,
     try_find_custom_type_or, try_find_date, try_find_float, try_find_nonzero, try_find_string,
-    try_find_unsigned, try_parse_child, try_parse_children, ElementData, ParsableElement,
+    try_find_unsigned, try_find_uuid, try_parse_child, try_parse_children, ElementData,
+    ParsableElement,
 };
 pub use element_id::ElementId;
 pub use enums::*;
@@ -1220,6 +1221,8 @@ pub struct ChapterAtom {
     enabled: Option<bool>,
     skip_type: Option<ChapterSkipType>,
     physical_equivalent: Option<ChapterPhysicalEquiv>,
+    segment_uuid: Option<NonZeroU128>,
+    segment_edition_uid: Option<NonZeroU64>,
     displays: Vec<ChapterDisplay>,
     nested_chapters: Vec<ChapterAtom>,
     chapter_tracks: Vec<NonZeroU64>,
@@ -1248,6 +1251,9 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
         let chapter_tracks = Vec::new(); // FIXME
         let process = find_children_in_fields::<_, ChapProcess>(r, fields, ElementId::ChapProcess)?;
 
+        let segment_uuid = try_find_uuid(r, fields, ElementId::ChapterSegmentUuid)?;
+        let segment_edition_uid = try_find_nonzero(fields, ElementId::ChapterSegmentEditionUid)?;
+
         Ok(Self {
             uid,
             string_uid,
@@ -1257,6 +1263,8 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
             enabled,
             skip_type,
             physical_equivalent,
+            segment_uuid,
+            segment_edition_uid,
             displays,
             nested_chapters,
             chapter_tracks,
@@ -1304,6 +1312,16 @@ impl ChapterAtom {
     /// Specify the physical equivalent of this ChapterAtom.
     pub fn physical_equivalent(&self) -> Option<ChapterPhysicalEquiv> {
         self.physical_equivalent
+    }
+
+    /// The SegmentUUID of another Segment to play during this chapter.
+    pub fn segment_uuid(&self) -> Option<NonZeroU128> {
+        self.segment_uuid
+    }
+
+    /// The EditionUID to play from the Segment linked in ChapterSegmentUUID.
+    pub fn segment_edition_uid(&self) -> Option<NonZeroU64> {
+        self.segment_edition_uid
     }
 
     /// Contains all possible strings to use for the chapter display.
