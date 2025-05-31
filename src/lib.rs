@@ -1654,6 +1654,7 @@ pub struct SimpleTag {
     default: Option<bool>,
     string: Option<String>,
     binary: Option<Vec<u8>>,
+    simple_tags: Vec<SimpleTag>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for SimpleTag {
@@ -1666,12 +1667,15 @@ impl<R: Read + Seek> ParsableElement<R> for SimpleTag {
         let string = try_find_string(fields, ElementId::TagString)?;
         let binary = try_find_binary(r, fields, ElementId::TagBinary)?;
 
+        let simple_tags = find_children_in_fields::<_, SimpleTag>(r, fields, ElementId::SimpleTag)?;
+
         Ok(Self {
             name,
             language,
             default,
             string,
             binary,
+            simple_tags,
         })
     }
 }
@@ -1700,6 +1704,11 @@ impl SimpleTag {
     /// The value of the tag, if it is binary.
     pub fn binary(&self) -> Option<&[u8]> {
         self.binary.as_deref()
+    }
+
+    /// Nested tags.
+    pub fn simple_tags(&self) -> &[SimpleTag] {
+        self.simple_tags.as_slice()
     }
 }
 
