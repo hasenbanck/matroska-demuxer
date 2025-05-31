@@ -1219,6 +1219,7 @@ pub struct ChapterAtom {
     hidden: Option<bool>,
     enabled: Option<bool>,
     displays: Vec<ChapterDisplay>,
+    nested_chapters: Vec<ChapterAtom>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
@@ -1234,6 +1235,8 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
 
         let displays =
             find_children_in_fields::<_, ChapterDisplay>(r, fields, ElementId::ChapterDisplay)?;
+        let nested_chapters =
+            find_children_in_fields::<_, ChapterAtom>(r, fields, ElementId::ChapterAtom)?;
 
         Ok(Self {
             uid,
@@ -1243,6 +1246,7 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
             hidden,
             enabled,
             displays,
+            nested_chapters,
         })
     }
 }
@@ -1281,6 +1285,11 @@ impl ChapterAtom {
     /// Contains all possible strings to use for the chapter display.
     pub fn displays(&self) -> &[ChapterDisplay] {
         self.displays.as_ref()
+    }
+
+    /// Contains all nested chapters.
+    pub fn nested_chapters(&self) -> &[ChapterAtom] {
+        self.nested_chapters.as_ref()
     }
 }
 
