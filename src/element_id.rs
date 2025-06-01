@@ -184,6 +184,7 @@ pub enum ElementId {
     SimpleTag,
     TagName,
     TagLanguage,
+    TagLanguageBcp47,
     TagDefault,
     TagString,
     TagBinary,
@@ -371,6 +372,7 @@ pub(crate) fn element_id_to_type(id: ElementId) -> ElementType {
         m.insert(ElementId::SimpleTag, ElementType::Master);
         m.insert(ElementId::TagName, ElementType::String);
         m.insert(ElementId::TagLanguage, ElementType::String);
+        m.insert(ElementId::TagLanguageBcp47, ElementType::String);
         m.insert(ElementId::TagDefault, ElementType::Unsigned);
         m.insert(ElementId::TagString, ElementType::String);
         m.insert(ElementId::TagBinary, ElementType::Binary);
@@ -560,6 +562,7 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x67C8, ElementId::SimpleTag);
         m.insert(0x45A3, ElementId::TagName);
         m.insert(0x447A, ElementId::TagLanguage);
+        m.insert(0x447B, ElementId::TagLanguageBcp47);
         m.insert(0x4484, ElementId::TagDefault);
         m.insert(0x4487, ElementId::TagString);
         m.insert(0x4485, ElementId::TagBinary);

@@ -1651,6 +1651,7 @@ impl Targets {
 pub struct SimpleTag {
     name: String,
     language: Option<String>,
+    language_bcp47: Option<String>,
     default: Option<bool>,
     string: Option<String>,
     binary: Option<Vec<u8>>,
@@ -1663,6 +1664,7 @@ impl<R: Read + Seek> ParsableElement<R> for SimpleTag {
     fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let name = find_string(fields, ElementId::TagName)?;
         let language = try_find_string(fields, ElementId::TagLanguage)?;
+        let language_bcp47 = try_find_string(fields, ElementId::TagLanguageBcp47)?;
         let default = try_find_bool(fields, ElementId::TagDefault)?;
         let string = try_find_string(fields, ElementId::TagString)?;
         let binary = try_find_binary(r, fields, ElementId::TagBinary)?;
@@ -1672,6 +1674,7 @@ impl<R: Read + Seek> ParsableElement<R> for SimpleTag {
         Ok(Self {
             name,
             language,
+            language_bcp47,
             default,
             string,
             binary,
@@ -1689,6 +1692,11 @@ impl SimpleTag {
     /// Specifies the language of the tag.
     pub fn language(&self) -> Option<&str> {
         self.language.as_deref()
+    }
+
+    /// Specifies the language of the tag in the BCP47 form.
+    pub fn language_bcp47(&self) -> Option<&str> {
+        self.language_bcp47.as_deref()
     }
 
     /// Indicate if this is the default/original language to use for the given tag.
