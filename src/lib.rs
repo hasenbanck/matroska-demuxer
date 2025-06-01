@@ -32,15 +32,16 @@ use std::{
     convert::TryInto,
     error::Error,
     io::{Read, Seek, SeekFrom},
-    num::NonZeroU64,
+    num::{NonZeroU128, NonZeroU64},
 };
 
 use ebml::{
-    collect_children, expect_master, find_bool_or, find_custom_type, find_float_or, find_nonzero,
-    find_nonzero_or, find_string, find_unsigned, find_unsigned_or, next_element,
-    parse_children_at_offset, parse_element_header, try_find_binary, try_find_custom_type,
-    try_find_custom_type_or, try_find_date, try_find_float, try_find_nonzero, try_find_string,
-    try_find_unsigned, try_parse_child, try_parse_children, ElementData, ParsableElement,
+    collect_children, expect_master, find_all_unsigned, find_binary, find_bool_or,
+    find_custom_type, find_float_or, find_nonzero, find_nonzero_or, find_string, find_unsigned,
+    find_unsigned_or, next_element, parse_children_at_offset, parse_element_header,
+    try_find_binary, try_find_custom_type, try_find_custom_type_or, try_find_date, try_find_float,
+    try_find_nonzero, try_find_string, try_find_unsigned, try_find_uuid, try_parse_child,
+    try_parse_children, ElementData, ParsableElement,
 };
 pub use element_id::ElementId;
 pub use enums::*;
@@ -210,18 +211,33 @@ pub struct Info {
     title: Option<String>,
     muxing_app: String,
     writing_app: String,
+    segment_uuid: Option<NonZeroU128>,
+    segment_filename: Option<String>,
+    prev_uuid: Option<NonZeroU128>,
+    prev_filename: Option<String>,
+    next_uuid: Option<NonZeroU128>,
+    next_filename: Option<String>,
+    segment_family: Option<NonZeroU128>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for Info {
     type Output = Self;
 
-    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let timestamp_scale = find_nonzero_or(fields, ElementId::TimestampScale, 1000000)?;
         let duration = try_find_float(fields, ElementId::Duration)?;
         let date_utc = try_find_date(fields, ElementId::DateUtc)?;
         let title = try_find_string(fields, ElementId::Title)?;
         let muxing_app = find_string(fields, ElementId::MuxingApp)?;
         let writing_app = find_string(fields, ElementId::WritingApp)?;
+
+        let segment_uuid = try_find_uuid(r, fields, ElementId::SegmentUuid)?;
+        let segment_filename = try_find_string(fields, ElementId::SegmentFilename)?;
+        let prev_uuid = try_find_uuid(r, fields, ElementId::PrevUuid)?;
+        let prev_filename = try_find_string(fields, ElementId::PrevFilename)?;
+        let next_uuid = try_find_uuid(r, fields, ElementId::NextUuid)?;
+        let next_filename = try_find_string(fields, ElementId::NextFilename)?;
+        let segment_family = try_find_uuid(r, fields, ElementId::SegmentFamily)?;
 
         if let Some(duration) = duration {
             if duration < 0.0 {
@@ -236,6 +252,13 @@ impl<R: Read + Seek> ParsableElement<R> for Info {
             title,
             muxing_app,
             writing_app,
+            segment_uuid,
+            segment_filename,
+            prev_uuid,
+            prev_filename,
+            next_uuid,
+            next_filename,
+            segment_family,
         })
     }
 }
@@ -269,6 +292,49 @@ impl Info {
     /// Writing  application.
     pub fn writing_app(&self) -> &str {
         &self.writing_app
+    }
+
+    /// A randomly generated unique ID to identify the Segment amongst many others.
+    ///
+    /// It is equivalent to a UUID v4 with all bits randomly (or pseudo-randomly) chosen.
+    pub fn segment_uuid(&self) -> Option<NonZeroU128> {
+        self.segment_uuid
+    }
+
+    /// A filename corresponding to this Segment.
+    pub fn segment_filename(&self) -> Option<&str> {
+        self.segment_filename.as_deref()
+    }
+
+    /// An ID to identify the previous Segment of a Linked Segment.
+    pub fn prev_uuid(&self) -> Option<NonZeroU128> {
+        self.prev_uuid
+    }
+
+    /// A filename corresponding to the file of the previous Linked Segment.
+    ///
+    /// Provision of the previous filename is for display convenience, but PrevUUID should be
+    /// considered authoritative for identifying the previous Segment in a Linked Segment.
+    pub fn prev_filename(&self) -> Option<&str> {
+        self.prev_filename.as_deref()
+    }
+
+    /// An ID to identify the next Segment of a Linked Segment.
+    pub fn next_uuid(&self) -> Option<NonZeroU128> {
+        self.next_uuid
+    }
+
+    /// A filename corresponding to the file of the next Linked Segment.
+    ///
+    /// Provision of the next filename is for display convenience, but PrevUUID should be considered
+    /// authoritative for identifying the next Segment in a Linked Segment.
+    pub fn next_filename(&self) -> Option<&str> {
+        self.next_filename.as_deref()
+    }
+
+    /// A unique ID that all Segments of a Linked Segment must share.
+    pub fn segment_family(&self) -> Option<NonZeroU128> {
+        self.segment_family
     }
 }
 
@@ -1110,6 +1176,11 @@ impl ContentEncAesSettings {
 /// Contains all information about a segment edition.
 #[derive(Clone, Debug)]
 pub struct EditionEntry {
+    uid: Option<NonZeroU64>,
+    default: Option<bool>,
+    hidden: Option<bool>,
+    ordered: Option<bool>,
+    displays: Vec<EditionDisplay>,
     chapter_atoms: Vec<ChapterAtom>,
 }
 
@@ -1117,10 +1188,24 @@ impl<R: Read + Seek> ParsableElement<R> for EditionEntry {
     type Output = Self;
 
     fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let uid = try_find_nonzero(fields, ElementId::EditionUid)?;
+        let default = try_find_bool(fields, ElementId::EditionFlagDefault)?;
+        let hidden = try_find_bool(fields, ElementId::EditionFlagHidden)?;
+        let ordered = try_find_bool(fields, ElementId::EditionFlagOrdered)?;
+
+        let displays =
+            find_children_in_fields::<_, EditionDisplay>(r, fields, ElementId::EditionDisplay)?;
         let chapter_atoms =
             find_children_in_fields::<_, ChapterAtom>(r, fields, ElementId::ChapterAtom)?;
 
-        Ok(Self { chapter_atoms })
+        Ok(Self {
+            uid,
+            default,
+            hidden,
+            ordered,
+            displays,
+            chapter_atoms,
+        })
     }
 }
 
@@ -1128,6 +1213,65 @@ impl EditionEntry {
     /// Contains the atom information to use as the chapter atom (apply to all tracks).
     pub fn chapter_atoms(&self) -> &[ChapterAtom] {
         self.chapter_atoms.as_ref()
+    }
+
+    /// A unique ID to identify the Edition.
+    pub fn uid(&self) -> Option<NonZeroU64> {
+        self.uid
+    }
+
+    /// Indicate if this edition should be used as the default one. Defaults to `false`.
+    pub fn default(&self) -> Option<bool> {
+        self.default
+    }
+
+    /// Indicate if this edition is hidden. Defaults to `false`.
+    pub fn hidden(&self) -> Option<bool> {
+        self.hidden
+    }
+
+    /// Indicate if the chapters can be defined multiple times and the order to play them is
+    /// enforced. Defaults to `false`.
+    pub fn ordered(&self) -> Option<bool> {
+        self.ordered
+    }
+
+    /// Contains all possible strings to use for the edition display.
+    pub fn displays(&self) -> &[EditionDisplay] {
+        self.displays.as_ref()
+    }
+}
+
+/// Contains all possible strings to use for the edition display.
+#[derive(Clone, Debug)]
+pub struct EditionDisplay {
+    string: String,
+    language_ietf: Option<String>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for EditionDisplay {
+    type Output = Self;
+
+    fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let string = find_string(fields, ElementId::EditionString)?;
+        let language_ietf = try_find_string(fields, ElementId::EditionLanguageIetf)?;
+
+        Ok(Self {
+            string,
+            language_ietf,
+        })
+    }
+}
+
+impl EditionDisplay {
+    /// Contains the string to use as the edition display.
+    pub fn string(&self) -> &str {
+        self.string.as_ref()
+    }
+
+    /// Specifies the language according to BCP47 and using the IANA Language Subtag Registry.
+    pub fn language_ietf(&self) -> Option<&str> {
+        self.language_ietf.as_deref()
     }
 }
 
@@ -1138,7 +1282,16 @@ pub struct ChapterAtom {
     string_uid: Option<String>,
     time_start: u64,
     time_end: Option<u64>,
+    hidden: Option<bool>,
+    enabled: Option<bool>,
+    skip_type: Option<ChapterSkipType>,
+    physical_equivalent: Option<ChapterPhysicalEquiv>,
+    segment_uuid: Option<NonZeroU128>,
+    segment_edition_uid: Option<NonZeroU64>,
     displays: Vec<ChapterDisplay>,
+    nested_chapters: Vec<ChapterAtom>,
+    chapter_tracks: Vec<NonZeroU64>,
+    process: Vec<ChapProcess>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
@@ -1149,16 +1302,38 @@ impl<R: Read + Seek> ParsableElement<R> for ChapterAtom {
         let string_uid = try_find_string(fields, ElementId::ChapterStringUid)?;
         let time_start = find_unsigned(fields, ElementId::ChapterTimeStart)?;
         let time_end = try_find_unsigned(fields, ElementId::ChapterTimeEnd)?;
+        let hidden = try_find_bool(fields, ElementId::ChapterFlagHidden)?;
+        let enabled = try_find_bool(fields, ElementId::ChapterFlagEnabled)?;
+
+        let skip_type = try_find_custom_type(fields, ElementId::ChapterSkipType)?;
+
+        let physical_equivalent = try_find_custom_type(fields, ElementId::ChapterPhysicalEquiv)?;
 
         let displays =
             find_children_in_fields::<_, ChapterDisplay>(r, fields, ElementId::ChapterDisplay)?;
+        let nested_chapters =
+            find_children_in_fields::<_, ChapterAtom>(r, fields, ElementId::ChapterAtom)?;
+        let chapter_tracks = Vec::new(); // FIXME
+        let process = find_children_in_fields::<_, ChapProcess>(r, fields, ElementId::ChapProcess)?;
+
+        let segment_uuid = try_find_uuid(r, fields, ElementId::ChapterSegmentUuid)?;
+        let segment_edition_uid = try_find_nonzero(fields, ElementId::ChapterSegmentEditionUid)?;
 
         Ok(Self {
             uid,
             string_uid,
             time_start,
             time_end,
+            hidden,
+            enabled,
+            skip_type,
+            physical_equivalent,
+            segment_uuid,
+            segment_edition_uid,
             displays,
+            nested_chapters,
+            chapter_tracks,
+            process,
         })
     }
 }
@@ -1184,9 +1359,55 @@ impl ChapterAtom {
         self.time_end
     }
 
+    /// Indicate if this chapter is hidden. Defaults to `false`.
+    pub fn hidden(&self) -> Option<bool> {
+        self.hidden
+    }
+
+    /// Indicate if this chapter is enabled. Defaults to `true`.
+    pub fn enabled(&self) -> Option<bool> {
+        self.enabled
+    }
+
+    /// Indicate what type of content the ChapterAtom contains and might be skipped.
+    pub fn skip_type(&self) -> Option<ChapterSkipType> {
+        self.skip_type
+    }
+
+    /// Specify the physical equivalent of this ChapterAtom.
+    pub fn physical_equivalent(&self) -> Option<ChapterPhysicalEquiv> {
+        self.physical_equivalent
+    }
+
+    /// The SegmentUUID of another Segment to play during this chapter.
+    pub fn segment_uuid(&self) -> Option<NonZeroU128> {
+        self.segment_uuid
+    }
+
+    /// The EditionUID to play from the Segment linked in ChapterSegmentUUID.
+    pub fn segment_edition_uid(&self) -> Option<NonZeroU64> {
+        self.segment_edition_uid
+    }
+
     /// Contains all possible strings to use for the chapter display.
     pub fn displays(&self) -> &[ChapterDisplay] {
         self.displays.as_ref()
+    }
+
+    /// Contains all nested chapters.
+    pub fn nested_chapters(&self) -> &[ChapterAtom] {
+        self.nested_chapters.as_ref()
+    }
+
+    /// List of tracks on which the chapter applies.
+    /// If this Element is not present, all tracks apply.
+    pub fn chapter_tracks(&self) -> &[NonZeroU64] {
+        self.chapter_tracks.as_ref()
+    }
+
+    /// Contains all the commands associated to the Atom.
+    pub fn process(&self) -> &[ChapProcess] {
+        self.process.as_ref()
     }
 }
 
@@ -1240,6 +1461,88 @@ impl ChapterDisplay {
     }
 }
 
+/// Contains all the commands associated to the chapter atom.
+#[derive(Clone, Debug)]
+pub struct ChapProcess {
+    codec_id: ChapProcessCodecId,
+    private: Option<Vec<u8>>,
+    commands: Vec<ChapProcessCommand>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for ChapProcess {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let codec_id = try_find_custom_type_or(
+            fields,
+            ElementId::ChapProcessCodecId,
+            ChapProcessCodecId::Matroska,
+        )?;
+
+        let private = try_find_binary(r, fields, ElementId::ChapProcessPrivate)?;
+
+        let commands = find_children_in_fields::<_, ChapProcessCommand>(
+            r,
+            fields,
+            ElementId::ChapProcessCommand,
+        )?;
+
+        Ok(Self {
+            codec_id,
+            private,
+            commands,
+        })
+    }
+}
+
+impl ChapProcess {
+    /// Contains the type of the codec used for the processing.
+    pub fn codec_id(&self) -> ChapProcessCodecId {
+        self.codec_id
+    }
+
+    /// Contains the command information.
+    pub fn private(&self) -> Option<&[u8]> {
+        self.private.as_deref()
+    }
+
+    /// Contains all the commands associated to the Atom.
+    pub fn commands(&self) -> &[ChapProcessCommand] {
+        self.commands.as_ref()
+    }
+}
+
+/// Contains all the commands associated to the chapter atom.
+#[derive(Clone, Debug)]
+pub struct ChapProcessCommand {
+    time: ChapProcessTime,
+    data: Vec<u8>,
+}
+
+impl<R: Read + Seek> ParsableElement<R> for ChapProcessCommand {
+    type Output = Self;
+
+    fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
+        let time = find_custom_type(fields, ElementId::ChapProcessTime)?;
+
+        let data = find_binary(r, fields, ElementId::ChapProcessData)?;
+
+        Ok(Self { time, data })
+    }
+}
+
+impl ChapProcessCommand {
+    /// Defines when the process command should be handled.
+    pub fn time(&self) -> ChapProcessTime {
+        self.time
+    }
+
+    /// Contains the command information.
+    pub fn data(&self) -> &[u8] {
+        self.data.as_ref()
+    }
+}
+
 /// A single metadata descriptor.
 #[derive(Clone, Debug)]
 pub struct Tag {
@@ -1278,8 +1581,11 @@ impl Tag {
 #[derive(Clone, Debug)]
 pub struct Targets {
     target_type_value: Option<u64>,
-    _target_type: Option<String>,
-    tag_track_uid: Option<u64>,
+    target_type: Option<String>,
+    tag_track_uid: Vec<u64>,
+    tag_edition_uid: Vec<u64>,
+    tag_chapter_uid: Vec<u64>,
+    tag_attachment_uid: Vec<u64>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for Targets {
@@ -1288,12 +1594,18 @@ impl<R: Read + Seek> ParsableElement<R> for Targets {
     fn new(_r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let target_type_value = try_find_unsigned(fields, ElementId::TargetTypeValue)?;
         let target_type = try_find_string(fields, ElementId::TargetType)?;
-        let tag_track_uid = try_find_unsigned(fields, ElementId::TagTrackUid)?;
+        let tag_track_uid = find_all_unsigned(fields, ElementId::TagTrackUid)?;
+        let tag_edition_uid = find_all_unsigned(fields, ElementId::TagEditionUid)?;
+        let tag_chapter_uid = find_all_unsigned(fields, ElementId::TagChapterUid)?;
+        let tag_attachment_uid = find_all_unsigned(fields, ElementId::TagAttachmentUid)?;
 
         Ok(Self {
             target_type_value,
-            _target_type: target_type,
+            target_type,
             tag_track_uid,
+            tag_edition_uid,
+            tag_chapter_uid,
+            tag_attachment_uid,
         })
     }
 }
@@ -1304,10 +1616,33 @@ impl Targets {
         self.target_type_value
     }
 
+    /// The value of the tag, if it is a string.
+    pub fn target_type(&self) -> Option<&str> {
+        self.target_type.as_deref()
+    }
+
     /// A unique ID to identify the track(s) the tags belong to.
     /// If the value is 0 at this level, the tags apply to all tracks in the Segment.
-    pub fn tag_track_uid(&self) -> Option<u64> {
-        self.tag_track_uid
+    pub fn tag_track_uid(&self) -> &[u64] {
+        &self.tag_track_uid
+    }
+
+    /// A unique ID to identify the edition(s) the tags belong to.
+    /// If the value is 0 at this level, the tags apply to all editions in the Segment.
+    pub fn tag_edition_uid(&self) -> &[u64] {
+        &self.tag_edition_uid
+    }
+
+    /// A unique ID to identify the chapter(s) the tags belong to.
+    /// If the value is 0 at this level, the tags apply to all chapters in the Segment.
+    pub fn tag_chapter_uid(&self) -> &[u64] {
+        &self.tag_chapter_uid
+    }
+
+    /// A unique ID to identify the attachment(s) the tags belong to.
+    /// If the value is 0 at this level, the tags apply to all attachments in the Segment.
+    pub fn tag_attachment_uid(&self) -> &[u64] {
+        &self.tag_attachment_uid
     }
 }
 
@@ -1316,9 +1651,11 @@ impl Targets {
 pub struct SimpleTag {
     name: String,
     language: Option<String>,
+    language_bcp47: Option<String>,
     default: Option<bool>,
     string: Option<String>,
     binary: Option<Vec<u8>>,
+    simple_tags: Vec<SimpleTag>,
 }
 
 impl<R: Read + Seek> ParsableElement<R> for SimpleTag {
@@ -1327,16 +1664,21 @@ impl<R: Read + Seek> ParsableElement<R> for SimpleTag {
     fn new(r: &mut R, fields: &[(ElementId, ElementData)]) -> Result<Self> {
         let name = find_string(fields, ElementId::TagName)?;
         let language = try_find_string(fields, ElementId::TagLanguage)?;
+        let language_bcp47 = try_find_string(fields, ElementId::TagLanguageBcp47)?;
         let default = try_find_bool(fields, ElementId::TagDefault)?;
         let string = try_find_string(fields, ElementId::TagString)?;
         let binary = try_find_binary(r, fields, ElementId::TagBinary)?;
 
+        let simple_tags = find_children_in_fields::<_, SimpleTag>(r, fields, ElementId::SimpleTag)?;
+
         Ok(Self {
             name,
             language,
+            language_bcp47,
             default,
             string,
             binary,
+            simple_tags,
         })
     }
 }
@@ -1352,6 +1694,11 @@ impl SimpleTag {
         self.language.as_deref()
     }
 
+    /// Specifies the language of the tag in the BCP47 form.
+    pub fn language_bcp47(&self) -> Option<&str> {
+        self.language_bcp47.as_deref()
+    }
+
     /// Indicate if this is the default/original language to use for the given tag.
     pub fn default(&self) -> Option<bool> {
         self.default
@@ -1365,6 +1712,11 @@ impl SimpleTag {
     /// The value of the tag, if it is binary.
     pub fn binary(&self) -> Option<&[u8]> {
         self.binary.as_deref()
+    }
+
+    /// Nested tags.
+    pub fn simple_tags(&self) -> &[SimpleTag] {
+        self.simple_tags.as_slice()
     }
 }
 

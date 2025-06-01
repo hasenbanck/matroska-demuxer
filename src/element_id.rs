@@ -24,6 +24,13 @@ pub enum ElementId {
     SeekId,
     SeekPosition,
     Info,
+    SegmentUuid,
+    SegmentFilename,
+    PrevUuid,
+    PrevFilename,
+    NextUuid,
+    NextFilename,
+    SegmentFamily,
     TimestampScale,
     Duration,
     DateUtc,
@@ -134,25 +141,50 @@ pub enum ElementId {
     CueBlockNumber,
     Chapters,
     EditionEntry,
+    EditionUid,
+    EditionFlagHidden,
+    EditionFlagDefault,
+    EditionFlagOrdered,
+    EditionDisplay,
+    EditionString,
+    EditionLanguageIetf,
     ChapterAtom,
     ChapterUid,
     ChapterStringUid,
     ChapterTimeStart,
     ChapterTimeEnd,
+    ChapterFlagHidden,
+    ChapterFlagEnabled,
+    ChapterSegmentUuid,
+    ChapterSkipType,
+    ChapterSegmentEditionUid,
+    ChapterPhysicalEquiv,
+    ChapterTrack,
+    ChapterTrackUID,
     ChapterDisplay,
     ChapString,
     ChapLanguage,
     ChapLanguageIetf,
     ChapCountry,
+    ChapProcess,
+    ChapProcessCodecId,
+    ChapProcessPrivate,
+    ChapProcessCommand,
+    ChapProcessTime,
+    ChapProcessData,
     Tags,
     Tag,
     Targets,
     TargetTypeValue,
     TargetType,
     TagTrackUid,
+    TagEditionUid,
+    TagChapterUid,
+    TagAttachmentUid,
     SimpleTag,
     TagName,
     TagLanguage,
+    TagLanguageBcp47,
     TagDefault,
     TagString,
     TagBinary,
@@ -180,6 +212,13 @@ pub(crate) fn element_id_to_type(id: ElementId) -> ElementType {
         m.insert(ElementId::SeekId, ElementType::Unsigned);
         m.insert(ElementId::SeekPosition, ElementType::Unsigned);
         m.insert(ElementId::Info, ElementType::Master);
+        m.insert(ElementId::SegmentUuid, ElementType::Binary);
+        m.insert(ElementId::SegmentFilename, ElementType::String);
+        m.insert(ElementId::PrevUuid, ElementType::Binary);
+        m.insert(ElementId::PrevFilename, ElementType::String);
+        m.insert(ElementId::NextUuid, ElementType::Binary);
+        m.insert(ElementId::NextFilename, ElementType::String);
+        m.insert(ElementId::SegmentFamily, ElementType::Binary);
         m.insert(ElementId::TimestampScale, ElementType::Unsigned);
         m.insert(ElementId::Duration, ElementType::Float);
         m.insert(ElementId::DateUtc, ElementType::Date);
@@ -290,25 +329,50 @@ pub(crate) fn element_id_to_type(id: ElementId) -> ElementType {
         m.insert(ElementId::CueBlockNumber, ElementType::Unsigned);
         m.insert(ElementId::Chapters, ElementType::Master);
         m.insert(ElementId::EditionEntry, ElementType::Master);
+        m.insert(ElementId::EditionUid, ElementType::Unsigned);
+        m.insert(ElementId::EditionFlagHidden, ElementType::Unsigned);
+        m.insert(ElementId::EditionFlagDefault, ElementType::Unsigned);
+        m.insert(ElementId::EditionFlagOrdered, ElementType::Unsigned);
+        m.insert(ElementId::EditionString, ElementType::String);
+        m.insert(ElementId::EditionLanguageIetf, ElementType::String);
+        m.insert(ElementId::EditionDisplay, ElementType::Master);
         m.insert(ElementId::ChapterAtom, ElementType::Master);
         m.insert(ElementId::ChapterUid, ElementType::Unsigned);
         m.insert(ElementId::ChapterStringUid, ElementType::String);
         m.insert(ElementId::ChapterTimeStart, ElementType::Unsigned);
         m.insert(ElementId::ChapterTimeEnd, ElementType::Unsigned);
+        m.insert(ElementId::ChapterFlagHidden, ElementType::Unsigned);
+        m.insert(ElementId::ChapterFlagEnabled, ElementType::Unsigned);
+        m.insert(ElementId::ChapterSegmentUuid, ElementType::Binary);
+        m.insert(ElementId::ChapterSkipType, ElementType::Unsigned);
+        m.insert(ElementId::ChapterSegmentEditionUid, ElementType::Unsigned);
+        m.insert(ElementId::ChapterPhysicalEquiv, ElementType::Unsigned);
+        m.insert(ElementId::ChapterTrack, ElementType::Master);
+        m.insert(ElementId::ChapterTrackUID, ElementType::Unsigned);
         m.insert(ElementId::ChapterDisplay, ElementType::Master);
         m.insert(ElementId::ChapString, ElementType::String);
         m.insert(ElementId::ChapLanguage, ElementType::String);
         m.insert(ElementId::ChapLanguageIetf, ElementType::String);
         m.insert(ElementId::ChapCountry, ElementType::String);
+        m.insert(ElementId::ChapProcess, ElementType::Master);
+        m.insert(ElementId::ChapProcessCodecId, ElementType::Unsigned);
+        m.insert(ElementId::ChapProcessPrivate, ElementType::Binary);
+        m.insert(ElementId::ChapProcessCommand, ElementType::Master);
+        m.insert(ElementId::ChapProcessTime, ElementType::Unsigned);
+        m.insert(ElementId::ChapProcessData, ElementType::Binary);
         m.insert(ElementId::Tags, ElementType::Master);
         m.insert(ElementId::Tag, ElementType::Master);
         m.insert(ElementId::Targets, ElementType::Master);
         m.insert(ElementId::TargetTypeValue, ElementType::Unsigned);
         m.insert(ElementId::TargetType, ElementType::String);
         m.insert(ElementId::TagTrackUid, ElementType::Unsigned);
+        m.insert(ElementId::TagEditionUid, ElementType::Unsigned);
+        m.insert(ElementId::TagChapterUid, ElementType::Unsigned);
+        m.insert(ElementId::TagAttachmentUid, ElementType::Unsigned);
         m.insert(ElementId::SimpleTag, ElementType::Master);
         m.insert(ElementId::TagName, ElementType::String);
         m.insert(ElementId::TagLanguage, ElementType::String);
+        m.insert(ElementId::TagLanguageBcp47, ElementType::String);
         m.insert(ElementId::TagDefault, ElementType::Unsigned);
         m.insert(ElementId::TagString, ElementType::String);
         m.insert(ElementId::TagBinary, ElementType::Binary);
@@ -338,6 +402,13 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x53AB, ElementId::SeekId);
         m.insert(0x53AC, ElementId::SeekPosition);
         m.insert(0x1549A966, ElementId::Info);
+        m.insert(0x73A4, ElementId::SegmentUuid);
+        m.insert(0x7384, ElementId::SegmentFilename);
+        m.insert(0x3CB923, ElementId::PrevUuid);
+        m.insert(0x3C83AB, ElementId::PrevFilename);
+        m.insert(0x3EB923, ElementId::NextUuid);
+        m.insert(0x3E83BB, ElementId::NextFilename);
+        m.insert(0x4444, ElementId::SegmentFamily);
         m.insert(0x2AD7B1, ElementId::TimestampScale);
         m.insert(0x4489, ElementId::Duration);
         m.insert(0x4461, ElementId::DateUtc);
@@ -448,25 +519,50 @@ pub(crate) fn id_to_element_id(id: u32) -> ElementId {
         m.insert(0x5378, ElementId::CueBlockNumber);
         m.insert(0x1043A770, ElementId::Chapters);
         m.insert(0x45B9, ElementId::EditionEntry);
+        m.insert(0x45BC, ElementId::EditionUid);
+        m.insert(0x45BD, ElementId::EditionFlagHidden);
+        m.insert(0x45DB, ElementId::EditionFlagDefault);
+        m.insert(0x45DD, ElementId::EditionFlagOrdered);
+        m.insert(0x4520, ElementId::EditionDisplay);
+        m.insert(0x4521, ElementId::EditionString);
+        m.insert(0x45E4, ElementId::EditionLanguageIetf);
         m.insert(0xB6, ElementId::ChapterAtom);
         m.insert(0x73C4, ElementId::ChapterUid);
         m.insert(0x5654, ElementId::ChapterStringUid);
         m.insert(0x91, ElementId::ChapterTimeStart);
         m.insert(0x92, ElementId::ChapterTimeEnd);
+        m.insert(0x98, ElementId::ChapterFlagHidden);
+        m.insert(0x4598, ElementId::ChapterFlagEnabled);
+        m.insert(0x6E67, ElementId::ChapterSegmentUuid);
+        m.insert(0x4588, ElementId::ChapterSkipType);
+        m.insert(0x6EBC, ElementId::ChapterSegmentEditionUid);
+        m.insert(0x63C3, ElementId::ChapterPhysicalEquiv);
+        m.insert(0x8F, ElementId::ChapterTrack);
+        m.insert(0x89, ElementId::ChapterTrackUID);
         m.insert(0x80, ElementId::ChapterDisplay);
         m.insert(0x85, ElementId::ChapString);
         m.insert(0x437C, ElementId::ChapLanguage);
         m.insert(0x437D, ElementId::ChapLanguageIetf);
         m.insert(0x437E, ElementId::ChapCountry);
+        m.insert(0x6944, ElementId::ChapProcess);
+        m.insert(0x6955, ElementId::ChapProcessCodecId);
+        m.insert(0x450D, ElementId::ChapProcessPrivate);
+        m.insert(0x6911, ElementId::ChapProcessCommand);
+        m.insert(0x6922, ElementId::ChapProcessTime);
+        m.insert(0x6933, ElementId::ChapProcessData);
         m.insert(0x1254C367, ElementId::Tags);
         m.insert(0x7373, ElementId::Tag);
         m.insert(0x63C0, ElementId::Targets);
         m.insert(0x68CA, ElementId::TargetTypeValue);
         m.insert(0x63CA, ElementId::TargetType);
         m.insert(0x63C5, ElementId::TagTrackUid);
+        m.insert(0x63C9, ElementId::TagEditionUid);
+        m.insert(0x63C4, ElementId::TagChapterUid);
+        m.insert(0x63C6, ElementId::TagAttachmentUid);
         m.insert(0x67C8, ElementId::SimpleTag);
         m.insert(0x45A3, ElementId::TagName);
         m.insert(0x447A, ElementId::TagLanguage);
+        m.insert(0x447B, ElementId::TagLanguageBcp47);
         m.insert(0x4484, ElementId::TagDefault);
         m.insert(0x4487, ElementId::TagString);
         m.insert(0x4485, ElementId::TagBinary);

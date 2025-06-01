@@ -553,3 +553,127 @@ impl From<u64> for AesSettingsCipherMode {
         }
     }
 }
+
+/// Indicate what type of content the ChapterAtom contains and might be skipped.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChapterSkipType {
+    /// Unknown.
+    Unknown,
+    /// No skipping.
+    NoSkipping,
+    /// Opening Credits.
+    OpeningCredits,
+    /// End Credits.
+    EndCredits,
+    /// Recap.
+    Recap,
+    /// Next Preview.
+    NextPreview,
+    /// Preview.
+    Preview,
+    /// Advertisement.
+    Advertisement,
+}
+
+impl From<u64> for ChapterSkipType {
+    fn from(d: u64) -> Self {
+        match d {
+            0 => ChapterSkipType::NoSkipping,
+            1 => ChapterSkipType::OpeningCredits,
+            2 => ChapterSkipType::EndCredits,
+            3 => ChapterSkipType::Recap,
+            4 => ChapterSkipType::NextPreview,
+            5 => ChapterSkipType::Preview,
+            6 => ChapterSkipType::Advertisement,
+            _ => ChapterSkipType::Unknown,
+        }
+    }
+}
+
+/// Specify the physical equivalent of this ChapterAtom.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChapterPhysicalEquiv {
+    /// Unknown.
+    Unknown,
+    /// The collection of different media.
+    ///
+    /// Example: set / package.
+    Set,
+    /// The physical medium.
+    ///
+    /// Example: CD / 12” / TAPE / DVD / VHS / LASERDISC.
+    Medium,
+    /// Side, when the original medium has different sides.
+    Side,
+    /// Layer.
+    ///
+    /// Physical layers on DVDs.
+    Layer,
+    /// Session, as found on CDs and DVDs.
+    Session,
+    /// Trask, as found on CDs and DVDs..
+    Track,
+    /// Index, as found on CDs and DVDs..
+    Index,
+}
+
+impl From<u64> for ChapterPhysicalEquiv {
+    fn from(d: u64) -> Self {
+        match d {
+            70 => ChapterPhysicalEquiv::Set,
+            60 => ChapterPhysicalEquiv::Medium,
+            50 => ChapterPhysicalEquiv::Side,
+            40 => ChapterPhysicalEquiv::Layer,
+            30 => ChapterPhysicalEquiv::Session,
+            20 => ChapterPhysicalEquiv::Track,
+            10 => ChapterPhysicalEquiv::Index,
+            _ => ChapterPhysicalEquiv::Unknown,
+        }
+    }
+}
+
+/// The type of the codec used for the chapter menu processing.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum ChapProcessCodecId {
+    /// Unknown.
+    Unknown,
+    /// Native matroska processing.
+    Matroska,
+    /// DVD command set.
+    DvdMenu,
+}
+
+impl From<u64> for ChapProcessCodecId {
+    fn from(d: u64) -> Self {
+        match d {
+            0 => ChapProcessCodecId::Matroska,
+            1 => ChapProcessCodecId::DvdMenu,
+            _ => ChapProcessCodecId::Unknown,
+        }
+    }
+}
+
+/// Defines when the process command should be handled.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChapProcessTime {
+    /// Unknown.
+    Unknown,
+    /// Process during the whole chapter.
+    WholeChapter,
+    /// Process before starting playback.
+    BeforePlayback,
+    /// Process after starting playback.
+    AfterPlayback,
+}
+
+impl From<u64> for ChapProcessTime {
+    fn from(d: u64) -> Self {
+        match d {
+            0 => ChapProcessTime::WholeChapter,
+            1 => ChapProcessTime::BeforePlayback,
+            2 => ChapProcessTime::AfterPlayback,
+            _ => ChapProcessTime::Unknown,
+        }
+    }
+}
