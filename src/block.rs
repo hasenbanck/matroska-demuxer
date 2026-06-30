@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     ebml::{parse_variable_i64, parse_variable_u64},
-    Result,
+    DemuxError, Result,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -81,8 +81,10 @@ pub(crate) fn parse_laced_frames<R: Read + Seek>(
 
     if lacing == Lacing::None {
         let header_end = r.stream_position()?;
-        let header_size = header_end - header_start;
-        let data_size = block_size - header_size;
+        let header_size = header_end.saturating_sub(header_start);
+        let data_size = block_size
+            .checked_sub(header_size)
+            .ok_or(DemuxError::InvalidBlockSize)?;
 
         let frame = LacedFrame {
             track,
@@ -111,10 +113,10 @@ pub(crate) fn parse_laced_frames<R: Read + Seek>(
                 - for example, 765 is coded 255;255;255;0.
             */
             Lacing::Xiph => {
-                let mut encoded_sizes = 0;
+                let mut encoded_sizes: u64 = 0;
                 for _ in 0..frame_count - 1 {
                     let size = parse_xiph_frame_size(r)?;
-                    encoded_sizes += size;
+                    encoded_sizes = encoded_sizes.saturating_add(size);
 
                     frames.push_back(LacedFrame {
                         track,
@@ -126,9 +128,13 @@ pub(crate) fn parse_laced_frames<R: Read + Seek>(
                     });
                 }
                 let header_end = r.stream_position()?;
-                let header_size = header_end - header_start;
-                let data_size = block_size - header_size;
-                let size = data_size - encoded_sizes;
+                let header_size = header_end.saturating_sub(header_start);
+                let data_size = block_size
+                    .checked_sub(header_size)
+                    .ok_or(DemuxError::InvalidBlockSize)?;
+                let size = data_size
+                    .checked_sub(encoded_sizes)
+                    .ok_or(DemuxError::InvalidBlockSize)?;
 
                 frames.push_back(LacedFrame {
                     track,
@@ -174,7 +180,7 @@ pub(crate) fn parse_laced_frames<R: Read + Seek>(
                         } else {
                             size.saturating_sub(abs)
                         };
-                        encoded_size += size;
+                        encoded_size = encoded_size.saturating_add(size);
 
                         frames.push_back(LacedFrame {
                             track,
@@ -188,9 +194,13 @@ pub(crate) fn parse_laced_frames<R: Read + Seek>(
                 }
 
                 let header_end = r.stream_position()?;
-                let header_size = header_end - header_start;
-                let data_size = block_size - header_size;
-                let size = data_size - encoded_size;
+                let header_size = header_end.saturating_sub(header_start);
+                let data_size = block_size
+                    .checked_sub(header_size)
+                    .ok_or(DemuxError::InvalidBlockSize)?;
+                let size = data_size
+                    .checked_sub(encoded_size)
+                    .ok_or(DemuxError::InvalidBlockSize)?;
 
                 frames.push_back(LacedFrame {
                     track,
@@ -212,8 +222,10 @@ pub(crate) fn parse_laced_frames<R: Read + Seek>(
             */
             Lacing::FixedSize => {
                 let header_end = r.stream_position()?;
-                let header_size = header_end - header_start;
-                let data_size = block_size - header_size;
+                let header_size = header_end.saturating_sub(header_start);
+                let data_size = block_size
+                    .checked_sub(header_size)
+                    .ok_or(DemuxError::InvalidBlockSize)?;
                 let size = data_size / frame_count;
 
                 for _ in 0..frame_count {
@@ -273,4 +285,29 @@ fn parse_i16<R: Read + Seek>(r: &mut R) -> Result<i16> {
     let mut bytes = [0u8; 2];
     r.read_exact(&mut bytes)?;
     Ok(i16::from_be_bytes(bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::*;
+
+    #[test]
+    fn reject_block_smaller_than_header() {
+        let data = vec![0x81, 0x00, 0x00, 0x00];
+        let mut cursor = Cursor::new(data);
+        let mut frames = VecDeque::new();
+        let result = parse_laced_frames(&mut cursor, &mut frames, 2, 0, 0, true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn reject_ebml_lace_exceeding_block() {
+        let data = vec![0x81, 0x00, 0x00, 0x06, 0x01, 0x81];
+        let mut cursor = Cursor::new(data);
+        let mut frames = VecDeque::new();
+        let result = parse_laced_frames(&mut cursor, &mut frames, 6, 0, 0, true);
+        assert!(result.is_err());
+    }
 }

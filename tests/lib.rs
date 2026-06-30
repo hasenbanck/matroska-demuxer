@@ -1,9 +1,18 @@
-use std::{fs::File, num::NonZeroU64};
+use std::{fs::File, io::Cursor, num::NonZeroU64};
 
 use matroska_demuxer::{
     ContentCompAlgo, ContentEncodingValue, Frame, MatrixCoefficients, MatroskaFile, Primaries,
     TrackEntry, TrackType, TransferCharacteristics,
 };
+
+#[test]
+fn reject_oversized_string_element() {
+    let data: Vec<u8> = vec![
+        0x1a, 0x45, 0xdf, 0xa3, 0x8a, 0x42, 0x82, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
+    ];
+    let result = MatroskaFile::open(Cursor::new(data));
+    assert!(result.is_err());
+}
 
 #[test]
 pub fn parse_simple_mkv() {

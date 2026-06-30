@@ -43,6 +43,15 @@ pub enum DemuxError {
     PositiveValueIsNotPositive,
     /// A value for duration is already set for this frame, only one BlockDuration is prelevant for one frame.
     FrameAlreadyHasDuration(u64),
+    /// An element or frame declared more data than is available in the stream.
+    ElementSizeExceedsStream {
+        /// The size declared by the element.
+        declared: u64,
+        /// The number of bytes actually remaining in the stream.
+        available: u64,
+    },
+    /// A block declared a size that is inconsistent with its own contents.
+    InvalidBlockSize,
 }
 
 impl std::fmt::Display for DemuxError {
@@ -124,6 +133,18 @@ impl std::fmt::Display for DemuxError {
                     f,
                     "a duration `{previous_duration}` is already set for current Frame"
                 )
+            }
+            DemuxError::ElementSizeExceedsStream {
+                declared,
+                available,
+            } => {
+                write!(
+                    f,
+                    "element declared size of {declared} bytes but only {available} bytes are available"
+                )
+            }
+            DemuxError::InvalidBlockSize => {
+                write!(f, "a block declared a size inconsistent with its contents")
             }
         }
     }

@@ -378,9 +378,16 @@ pub(crate) fn try_find_binary<R: Read + Seek>(
 ) -> Result<Option<Vec<u8>>> {
     if let Some((_, data)) = fields.iter().find(|(id, _)| *id == element_id) {
         if let ElementData::Location { offset, size } = data {
+            r.seek(SeekFrom::Start(*offset))?;
+            let available = remaining_len(r)?;
+            if *size > available {
+                return Err(DemuxError::ElementSizeExceedsStream {
+                    declared: *size,
+                    available,
+                });
+            }
             let size = usize::try_from(*size)?;
             let mut data = vec![0_u8; size];
-            r.seek(SeekFrom::Start(*offset))?;
             r.read_exact(&mut data)?;
             Ok(Some(data))
         } else {
@@ -531,6 +538,14 @@ fn parse_variable_u64_data<R: Read>(r: &mut R, byte: u8, left: u8) -> Result<u64
     Ok(u64::from_be_bytes(bytes) >> shift)
 }
 
+/// Returns the number of bytes remaining from the current position to the end of the stream.
+pub(crate) fn remaining_len<R: Seek>(r: &mut R) -> Result<u64> {
+    let pos = r.stream_position()?;
+    let end = r.seek(SeekFrom::End(0))?;
+    r.seek(SeekFrom::Start(pos))?;
+    Ok(end.saturating_sub(pos))
+}
+
 fn parse_location<R: Read + Seek>(r: &mut R, size: u64) -> Result<(u64, u64)> {
     let offset = r.stream_position()?;
     // We skip the data and set the reader to the next element, if the size is known.
@@ -599,9 +614,16 @@ fn parse_date<R: Read>(r: &mut R, size: u64) -> Result<i64> {
     Ok(i64::from_be_bytes(bytes) >> shift)
 }
 
-fn parse_string<R: Read>(r: &mut R, size: u64) -> Result<String> {
+fn parse_string<R: Read + Seek>(r: &mut R, size: u64) -> Result<String> {
     if size == 0 {
         return Ok(String::from(""));
+    }
+    let available = remaining_len(r)?;
+    if size > available {
+        return Err(DemuxError::ElementSizeExceedsStream {
+            declared: size,
+            available,
+        });
     }
     let size: usize = size.try_into()?;
     let mut bytes = vec![0u8; size];
@@ -817,5 +839,26 @@ mod tests {
         assert_eq!(element_data, ElementData::String("".to_owned()));
 
         Ok(())
+    }
+
+    #[test]
+    fn reject_oversized_string() {
+        let mut cursor = Cursor::new(vec![0u8; 4]);
+        let result = parse_string(&mut cursor, 0x00FF_FFFF_FFFF_FFFE);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn reject_oversized_binary() {
+        let mut cursor = Cursor::new(vec![0u8; 8]);
+        let fields = vec![(
+            ElementId::CodecPrivate,
+            ElementData::Location {
+                offset: 0,
+                size: 0x00FF_FFFF_FFFF_FFFE,
+            },
+        )];
+        let result = try_find_binary(&mut cursor, &fields, ElementId::CodecPrivate);
+        assert!(result.is_err());
     }
 }
