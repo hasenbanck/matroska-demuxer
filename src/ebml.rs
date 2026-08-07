@@ -59,7 +59,20 @@ pub(crate) fn collect_children<R: Read + Seek>(
 ) -> Result<Vec<(ElementId, ElementData)>> {
     let mut children = Vec::with_capacity(16);
     r.seek(SeekFrom::Start(offset))?;
-    let end = offset + size;
+    let available = remaining_len(r)?;
+
+    // An unknown size means that the master element extends to the end of the stream.
+    let end = if size == u64::MAX {
+        offset.saturating_add(available)
+    } else {
+        if size > available {
+            return Err(DemuxError::ElementSizeExceedsStream {
+                declared: size,
+                available,
+            });
+        }
+        offset.saturating_add(size)
+    };
 
     while r.stream_position()? < end {
         let (element_id, element_data) = next_element(r)?;
@@ -68,7 +81,7 @@ pub(crate) fn collect_children<R: Read + Seek>(
             if size == u64::MAX {
                 break;
             }
-            r.seek(SeekFrom::Start(offset + size))?;
+            r.seek(SeekFrom::Start(offset.saturating_add(size)))?;
         }
 
         if element_id != ElementId::Unknown {
@@ -550,7 +563,7 @@ fn parse_location<R: Read + Seek>(r: &mut R, size: u64) -> Result<(u64, u64)> {
     let offset = r.stream_position()?;
     // We skip the data and set the reader to the next element, if the size is known.
     if size != u64::MAX {
-        r.seek(SeekFrom::Start(offset + size))?;
+        r.seek(SeekFrom::Start(offset.saturating_add(size)))?;
     }
     Ok((offset, size))
 }
@@ -845,6 +858,29 @@ mod tests {
     fn reject_oversized_string() {
         let mut cursor = Cursor::new(vec![0u8; 4]);
         let result = parse_string(&mut cursor, 0x00FF_FFFF_FFFF_FFFE);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn collect_children_of_unknown_size_master_element() -> Result<()> {
+        let data: Vec<u8> = vec![0x1A, 0x45, 0xDF, 0xA3, 0xFF, 0x42, 0x86, 0x81, 0x01];
+        let mut cursor = Cursor::new(data);
+        let (offset, size) = expect_master(&mut cursor, ElementId::Ebml, None)?;
+        assert_eq!(size, u64::MAX);
+
+        let children = collect_children(&mut cursor, offset, size)?;
+        assert_eq!(
+            children,
+            vec![(ElementId::EbmlVersion, ElementData::Unsigned(1))]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn reject_master_element_exceeding_stream() {
+        let mut cursor = Cursor::new(vec![0u8; 4]);
+        let result = collect_children(&mut cursor, 0, 0x00FF_FFFF_FFFF_FFFE);
         assert!(result.is_err());
     }
 
