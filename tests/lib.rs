@@ -1,8 +1,8 @@
 use std::{fs::File, io::Cursor, num::NonZeroU64};
 
 use matroska_demuxer::{
-    ContentCompAlgo, ContentEncodingValue, Frame, MatrixCoefficients, MatroskaFile, Primaries,
-    TrackEntry, TrackType, TransferCharacteristics,
+    ContentCompAlgo, ContentEncodingValue, DemuxError, ElementId, Frame, MatrixCoefficients,
+    MatroskaFile, Primaries, TrackEntry, TrackType, TransferCharacteristics,
 };
 
 #[test]
@@ -12,6 +12,26 @@ fn reject_oversized_string_element() {
     ];
     let result = MatroskaFile::open(Cursor::new(data));
     assert!(result.is_err());
+}
+
+#[test]
+fn unknown_size_master_element_at_end_of_stream() {
+    let data: Vec<u8> = vec![0x1a, 0x45, 0xdf, 0xa3, 0xff];
+    let result = MatroskaFile::open(Cursor::new(data));
+    assert!(matches!(
+        result,
+        Err(DemuxError::ElementNotFound(ElementId::DocType))
+    ));
+}
+
+#[test]
+fn unknown_size_master_element_collects_children() {
+    let data: Vec<u8> = vec![
+        0x1a, 0x45, 0xdf, 0xa3, 0xff, 0x42, 0x82, 0x88, 0x6d, 0x61, 0x74, 0x72, 0x6f, 0x73, 0x6b,
+        0x61, 0x42, 0x87, 0x81, 0x04, 0x42, 0x85, 0x81, 0x02,
+    ];
+    let result = MatroskaFile::open(Cursor::new(data));
+    assert!(matches!(result, Err(DemuxError::IoError(_))));
 }
 
 #[test]
