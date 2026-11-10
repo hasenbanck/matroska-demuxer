@@ -806,3 +806,24 @@ pub fn parse_test8_mkv() {
     mkv.seek(1_000_000).unwrap();
     assert!(!mkv.next_frame(&mut frame).unwrap());
 }
+
+#[test]
+pub fn seek_with_cue_relative_positions() {
+    // Several clusters whose cues carry a `CueRelativePosition` (ffmpeg writes them): a seek to a
+    // key frame past the first cluster lands on that key frame.
+    let file = File::open("tests/data/cues_relative.mkv").unwrap();
+    let mut mkv = MatroskaFile::open(file).unwrap();
+    let mut frame = Frame::default();
+    let mut key_frames = Vec::new();
+    while mkv.next_frame(&mut frame).unwrap() {
+        if frame.is_keyframe == Some(true) {
+            key_frames.push(frame.timestamp);
+        }
+    }
+    assert!(key_frames.len() > 2);
+    for &timestamp in &key_frames {
+        mkv.seek(timestamp).unwrap();
+        assert!(mkv.next_frame(&mut frame).unwrap());
+        assert_eq!(frame.timestamp, timestamp);
+    }
+}

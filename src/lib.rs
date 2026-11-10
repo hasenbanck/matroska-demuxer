@@ -1720,8 +1720,9 @@ impl<R: Read + Seek> MatroskaFile<R> {
                     let mut target_offset = point.track_position.cluster_position;
 
                     if let Some(relative_position) = point.track_position.relative_position {
+                        // The relative position counts from the cue's own cluster.
                         let (cluster_data_offset, cluster_timestamp) =
-                            self.get_cluster_offset_and_timestamp(cluster_start)?;
+                            self.get_cluster_offset_and_timestamp(target_offset)?;
                         self.cluster_timestamp = cluster_timestamp;
                         target_offset = cluster_data_offset + relative_position;
                     }
